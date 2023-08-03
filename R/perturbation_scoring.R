@@ -24,6 +24,9 @@ NULL
 #' all are assigned NP.
 #' @param de.assay Assay to use when performing differential expression analysis.
 #' Usually RNA.
+#' @param logfc.threshold the log-fold-change threshold to select the large-effect
+#' DE genes. Only DE genes with log-fold-change larger than this value will be 
+#' selected. Default is 0.25.
 #' @param verbose Display messages
 #' @param split.by metadata column with experimental condition/cell type
 #' classification information. This is meant to be used to account for cases a
@@ -56,11 +59,18 @@ PRTBScoring = function (object, assay = "PRTB", slot = "scale.data", labels = "g
                         verbose = FALSE, split.by = NULL, fine.mode = FALSE, 
                         fine.mode.labels = "guide_ID", prtb.type = "KO", 
                         DE.gene = NULL, max.de.genes = 100, harmonize = F, 
-                        min_prop_ntgd = 0.1, pval.cutoff = 0.05) 
+                        min_prop_ntgd = 0.1, pval.cutoff = 0.05, 
+                        seed = 10282021) 
 {
     print("Running PRTBScoring to calculate the perturbation scores \n")
     
+    set.seed(seed = seed)
+    
     assay <- assay %||% DefaultAssay(object = object)
+    if(!assay %in% names(test@assays)){
+        stop(paste0("The 'assay' being specified does not exist! Please check. Have you run CalcPerturbSig() yet?"))
+    }
+    
     if (is.null(x = labels)) {
         stop("Please specify target gene class metadata name")
     }
@@ -156,7 +166,9 @@ PRTBScoring = function (object, assay = "PRTB", slot = "scale.data", labels = "g
                     # collapse the list into a single vectors of sub-sampled NT cells
                     sub.ntgd.cells = Reduce(c, sub.cells.s.list.ntgd)
                     rm(cells.s.list.gd, cells.s.list.ntgd, length.gd, length.ntgd, prop.gd, sum.desire.length.ntgd, desire.length.ntgd, sub.cells.s.list.ntgd)
-                    print("Done with harmonizing the cell composition in NT cells (fine mode).")
+                    if(verbose){
+                        print("Done with harmonizing the cell composition in NT cells (fine mode).")
+                    }
                     
                     Idents(object = object) <- labels
                 } else {
@@ -231,7 +243,9 @@ PRTBScoring = function (object, assay = "PRTB", slot = "scale.data", labels = "g
                 # collapse the list into a single vectors of sub-sampled NT cells
                 sub.nt.cells = Reduce(c, sub.cells.s.list.nt)
                 rm(cells.s.list.gene, cells.s.list.nt, length.gene, length.nt, prop.gene, sum.desire.length.nt, desire.length.nt, sub.cells.s.list.nt)
-                print("Done with harmonizing the cell composition in NT cells.")
+                if(verbose){
+                    print("Done with harmonizing the cell composition in NT cells.")
+                }
                 
                 Idents(object = object) <- labels
             } else {
@@ -251,6 +265,8 @@ PRTBScoring = function (object, assay = "PRTB", slot = "scale.data", labels = "g
                                                    de.assay = de.assay, logfc.threshold = logfc.threshold, 
                                                    labels = labels, verbose = verbose, pval.cutoff = pval.cutoff)
             }
+            
+            
         }
         # print(gene)
         # print(all.de.genes)
@@ -282,22 +298,23 @@ PRTBScoring = function (object, assay = "PRTB", slot = "scale.data", labels = "g
             }
             
         }
+        
+        print(paste0("Done with extracting top DE genes for ", gene))
     }
     
     all_markers <- unique(x = unlist(x = prtb_markers))
     missing_genes <- all_markers[!all_markers %in% rownames(x = object[[assay]])]
-    print(missing_genes)
+    # print(missing_genes)
     object <- Seurat:::GetMissingPerturb(object = object, assay = assay, 
                                          features = missing_genes, verbose = verbose)
+    
     print("Done with getting Missing PRTB")
+    
     
     for (s in splits) {
         cells.s <- cells.s.list[[s]]
         genes <- setdiff(x = unique(x = object[[labels]][cells.s, 
                                                          1]), y = nt.class.name)
-        if (verbose) {
-            message("Classifying cells for: ")
-        }
         for (gene in genes) {
             Idents(object = object) <- labels
             post.prob <- 0
@@ -333,8 +350,8 @@ PRTBScoring = function (object, assay = "PRTB", slot = "scale.data", labels = "g
                 Idents(object = object) <- new.class.name
                 guide.cells <- intersect(x = WhichCells(object = object, 
                                                         idents = gene), y = cells.s)
-                vec <- rowMeans2(x = dat[, guide.cells, drop = FALSE]) - 
-                    rowMeans2(x = dat[, nt.cells, drop = FALSE])
+                vec <- matrixStats::rowMeans2(x = dat[, guide.cells, drop = FALSE]) - 
+                    matrixStats::rowMeans2(x = dat[, nt.cells, drop = FALSE])
                 
                 # save the mat and vec to easily calculate the weights by rowSums
                 pvec_mat = sweep(t(dat), MARGIN=2, vec, `*`) 
@@ -342,7 +359,7 @@ PRTBScoring = function (object, assay = "PRTB", slot = "scale.data", labels = "g
                 names(vec_mat) = colnames(pvec_mat)
                 
                 # the weights 
-                pvec = rowSums2(pvec_mat)/sum(vec_mat)
+                pvec = matrixStats::rowSums2(pvec_mat)/sum(vec_mat)
                 names(pvec) = rownames(pvec_mat)
                 
                 # create a list to store the PRTB score
@@ -368,7 +385,7 @@ PRTBScoring = function (object, assay = "PRTB", slot = "scale.data", labels = "g
                 
                 # Function to calculate pvec2
                 calc_pvec2 <- function(include_gene) {
-                    pvec2 <- rowSums2(pvec_mat[, include_gene, drop = F])/sum(vec_mat[include_gene])
+                    pvec2 <- matrixStats::rowSums2(pvec_mat[, include_gene, drop = F])/sum(vec_mat[include_gene])
                     return(pvec2)
                 }
                 
@@ -382,7 +399,9 @@ PRTBScoring = function (object, assay = "PRTB", slot = "scale.data", labels = "g
                 }
 
             }
+            
         }
+        print(paste0("Done with calculating scores for ", s))
     }
     Tool(object = object) <- gv.list
     # Idents(object = object) <- new.class.name

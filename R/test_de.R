@@ -1,0 +1,56 @@
+
+
+
+test = readRDS("/Users/uqljian5/Desktop/Lab_stuffs_NYGC/Paper_information_gathering/results/gRNA_efficiency/plot_2023Jun05/IFNG_Batch2_LOOv3_Parse_2023Jan04.rds")
+test = test[[1]]
+test = subset(test, subset = gene %in% c("NT", "IFNGR1", "ZC3H3"))
+
+old_score = Tool(test, slot = "RunMixscape_LOOv3")
+saveRDS(test, file = "/Users/uqljian5/Documents/github_repo/test_data/subset_IFNG_Batch2_Parse_2023Jan04.rds")
+saveRDS(old_score, file = "/Users/uqljian5/Documents/github_repo/test_data/old_score_IFNG_Batch2_Parse_2023Jan04.rds")
+
+
+test = readRDS(file = "/Users/uqljian5/Documents/github_repo/test_data/subset_IFNG_Batch2_Parse_2023Jan04.rds")
+
+test <- CalcPerturbSig(
+    object = test, 
+    assay = "RNA", 
+    slot = "data", 
+    gd.class ="gene", 
+    nt.cell.class = "NT", 
+    reduction = "pca", 
+    ndims = 40, 
+    num.neighbors = 20, 
+    new.assay.name = "PRTB", 
+    split.by = "cell_type")
+
+
+test = PRTBScoring(
+    object = test, 
+    assay = "PRTB", 
+    slot = "scale.data", 
+    labels = "gene", 
+    nt.class.name = "NT", 
+    min.de.genes = 5, 
+    split.by = "cell_type", 
+    logfc.threshold = 0.2,
+    de.assay = "RNA",
+    max.de.genes = 100, 
+    prtb.type = "P", new.class.name = "mixscape_v1", fine.mode = T, fine.mode.labels = "NT", harmonize = T)
+
+new_score = Tool(test, slot = "PRTBScoring")
+new_score2 = Tool(test, slot = "PRTBScoring")
+
+
+
+plot(x = old_score$ZC3H3$A549$`EMC3-AS1`, 
+     y = new_score$ZC3H3$A549$`EMC3-AS1`)
+abline(0, 1)
+
+
+plot(x = new_score$ZC3H3$BXPC3$pvec, 
+     y = new_score2$ZC3H3$BXPC3$pvec)
+abline(0, 1)
+
+
+
