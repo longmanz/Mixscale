@@ -116,3 +116,54 @@ get_idx = function(gene_exp = NULL, idx_P = NULL, idx_NT = NULL,
     return(TRUE)
 }
 
+
+#' Calculate log-fold-change given a vector of gene expression and the indices of perturbed cells and non-target cells
+#'
+#' Function to calculate log-fold-change for pooled CRISPR screen datasets.
+#' It is just a simple function to calculate the log-fold-change. Users can customise the min.cells, 
+#' minimal expression threshold, pseudo-count (the small value added to the expression level to avoid log(0)), 
+#' minimal percentage of cells expression the genes, and the base of the log.  
+#'
+#' @inheritParams Seurat::FoldChange
+#' @return Returns a single value of the log-fold-change of the input gene.
+#' @export
+#' @concept perturbation_scoring
+FoldChange_new <- function(
+        object,
+        cells.1,
+        cells.2,
+        mean.fxn,
+        fc.name,
+        features = NULL,
+        ...
+) {
+    features <- features %||% rownames(x = object)
+    
+    # Calculate percent expressed
+    thresh.min <- 0
+    
+    min.cell.1 = rowSums(x = object[features, cells.1, drop = FALSE] > thresh.min) 
+    min.cell.2 = rowSums(x = object[features, cells.2, drop = FALSE] > thresh.min) 
+    
+    pct.1 <- round(
+        x = rowSums(x = object[features, cells.1, drop = FALSE] > thresh.min) /
+            length(x = cells.1),
+        digits = 3
+    )
+    pct.2 <- round(
+        x = rowSums(x = object[features, cells.2, drop = FALSE] > thresh.min) /
+            length(x = cells.2),
+        digits = 3
+    )
+    # Calculate fold change
+    data.1 <- mean.fxn(object[features, cells.1, drop = FALSE])
+    data.2 <- mean.fxn(object[features, cells.2, drop = FALSE])
+    fc <- (data.1 - data.2)
+    fc.results <- as.data.frame(x = cbind(fc, pct.1, pct.2, min.cell.1, min.cell.2))
+    colnames(fc.results) <- c(fc.name, "pct.1", "pct.2", "min.cell.1", "min.cell.2")
+    return(fc.results)
+}
+
+
+
+

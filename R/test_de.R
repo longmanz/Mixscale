@@ -25,7 +25,7 @@ test <- CalcPerturbSig(
     split.by = "cell_type")
 
 
-test = PRTBScoring(
+test1 = PRTBScoring(
     object = test, 
     assay = "PRTB", 
     slot = "scale.data", 
@@ -36,10 +36,24 @@ test = PRTBScoring(
     logfc.threshold = 0.2,
     de.assay = "RNA",
     max.de.genes = 100, 
-    prtb.type = "P", new.class.name = "mixscape_v1", fine.mode = T, fine.mode.labels = "NT", harmonize = T)
+    prtb.type = "P", new.class.name = "mixscape_v1", fine.mode = F, fine.mode.labels = "NT", harmonize = T, seed = 1)
 
-new_score = Tool(test, slot = "PRTBScoring")
-new_score2 = Tool(test, slot = "PRTBScoring")
+test2 = PRTBScoring(
+    object = test, 
+    assay = "PRTB", 
+    slot = "scale.data", 
+    labels = "gene", 
+    nt.class.name = "NT", 
+    min.de.genes = 5, 
+    split.by = "cell_type", 
+    logfc.threshold = 0.2,
+    de.assay = "RNA",
+    max.de.genes = 100, 
+    prtb.type = "P", new.class.name = "mixscape_v1", fine.mode = F, fine.mode.labels = "NT", harmonize = T)
+
+
+new_score = Tool(test1, slot = "PRTBScoring")
+new_score2 = Tool(test2, slot = "PRTBScoring")
 
 
 
@@ -48,9 +62,20 @@ plot(x = old_score$ZC3H3$A549$`EMC3-AS1`,
 abline(0, 1)
 
 
-plot(x = new_score$ZC3H3$BXPC3$pvec, 
-     y = new_score2$ZC3H3$BXPC3$pvec)
+plot(x = new_score$IFNGR1$BXPC3$pvec, 
+     y = new_score2$IFNGR1$BXPC3$pvec)
 abline(0, 1)
+
+
+#################
+x = FoldChange_new(object = GetAssayData(object = test1, slot = "data"),
+               cells.1 = colnames(test1)[test1$gene == "NT"],
+               cells.2 = colnames(test1)[test1$gene == "IFNGR1"],
+               mean.fxn = function(x) log(x = rowMeans(x = expm1(x = x)) + 0.1, base = 2),
+               fc.name = "avg_log2FC",
+               features = rownames(x = test1) ) 
+
+
 
 
 

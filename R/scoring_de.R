@@ -40,7 +40,10 @@ scoringDE = function (object, assay = "PRTB", slot = "data", labels = "gene",
                       split.by = "cell_type",
                       total_ct_labels = "nCount_RNA",  
                       logfc.threshold = 0.2, 
-                      ...) {
+                      pseudocount.use = 0.1, 
+                      base = 2,
+                      min.pct = 0.1, 
+                      min.cells = 3) {
     # 
     print("Running scoring DE test!\n")
     
@@ -59,23 +62,15 @@ scoringDE = function (object, assay = "PRTB", slot = "data", labels = "gene",
         stop("Please specify target gene class metadata name")
     }
     
-    dat <- GetAssayData(object = object[[assay]], 
-                        slot = "data")[de.genes, all.cells, drop = FALSE]
-    if (slot == "scale.data") {
-        dat <- ScaleData(object = dat, features = de.genes, 
-                         verbose = FALSE)
-    }
-    
     # get the PRTBs with weights
-    DefaultAssay(object) = "PRTB"
     prtb_score <- Tool(object = object, slot = "PRTBScoring")
     wt_PRTB_list = sort(names(prtb_score))
-    DefaultAssay(object) = "RNA"
     
     # get the full list of PRTBs 
-    all_PRTB_list = sort(unique(object[[labels]]))
+    all_PRTB_list = sort(unique(object[[labels]][,1]))
     all_PRTB_list = all_PRTB_list[all_PRTB_list != nt.class.name]
     wt_PRTB_list = wt_PRTB_list[wt_PRTB_list %in% all_PRTB_list]
+    DefaultAssay(object) = "RNA"
     
     # 
     # count_data = GetAssayData(object = object[['RNA']], slot = "counts")   # get the raw count data (required by neg binom)
@@ -83,9 +78,12 @@ scoringDE = function (object, assay = "PRTB", slot = "data", labels = "gene",
     
     # get the overall covariate matrix from the meta.data
     mat_B = data.frame(cell_label = colnames(object), 
-                       nCount_RNA = object[[total_ct_labels]], 
-                       cell_type = as.factor(object[[split.by]]), 
-                       gene = object[[labels]] )
+                       nCount_RNA = object[[total_ct_labels]][,1], 
+                       cell_type = as.factor(object[[split.by]][,1]), 
+                       gene = object[[labels]][,1] )
+    
+    # the list to store all the DE results for every PRTB
+    all_res = list()
     
     # perform scoring DE test for each PRTB
     for(PRTB in all_PRTB_list){
@@ -164,7 +162,7 @@ scoringDE = function (object, assay = "PRTB", slot = "data", labels = "gene",
             rm(tmp)
             mat_all$log_ct = log10(mat_all$nCount_RNA)
             mat_all = mat_all[order(mat_all$weight), ]
-
+            
             # DE Flag:
             DE_FLAG = "standard"
         }
@@ -172,49 +170,260 @@ scoringDE = function (object, assay = "PRTB", slot = "data", labels = "gene",
         ##############################################
         # get idx for the cells of this PRTB
         idx = match(mat_all$cell_label, colnames(object))
-
-        idx_NT = match(mat_all$cell_label[mat_all$gene == "NT"], colnames(count_data2))
-        idx_P = match(mat_all$cell_label[mat_all$gene != "NT"], colnames(count_data2))
-
+        
+        # idx_NT = match(mat_all$cell_label[mat_all$gene == "NT"], colnames(count_data2))
+        # idx_P = match(mat_all$cell_label[mat_all$gene != "NT"], colnames(count_data2))
+        
         count_data2 = GetAssayData(object = object[['RNA']], slot = "counts")[, idx]
         count_data_std2 = GetAssayData(object = object[['RNA']], slot = "data")[, idx]
-
+        
         # do not do fold-change check, only do var and min.pct check
-        idx_for_DE = which(apply(count_data_std2, MARGIN = 1, FUN = get_idx, idx_P = idx_P, idx_NT = idx_NT, logfc.threshold = 0))
-        # # always include the PRTB gene itself in the DE test
-        # idx_PRTB = which(row.names(count_data_std2) %in% PRTB)
-        # # merge the two indices
-        # idx_for_DE = sort(unique(c(idx_for_DE, idx_PRTB)))
+        # idx_for_DE = which(apply(count_data_std2, MARGIN = 1, FUN = get_idx, idx_P = idx_P, idx_NT = idx_NT, logfc.threshold = logfc.threshold, norm.method = 'log.norm'))
+        # overall_FC = FoldChange_new(object = GetAssayData(object = object, slot = "data"),
+        #                                 cells.1 = colnames(object)[idx_NT],
+        #                                 cells.2 = colnames(object)[idx_P],
+        #                                 mean.fxn = function(x) log(x = rowMeans(x = expm1(x = x)) + pseudocount.use, base = base),
+        #                                 fc.name = "avg_log2FC",
+        #                                 features = rownames(x = object) ) 
+        # 
+        # idx_for_DE = (overall_FC$avg_log2FC != 0) & 
+        #     (overall_FC$pct.1 >= min.pct | overall_FC$pct.2 >= min.pct) & 
+        #     (overall_FC$min.cell.1 >= min.cells | overall_FC$min.cell.2 >= min.cells)
         
         # here we will calculate the logfc within each cell type. 
+        fc_list = list()
         for( idx_i in 1:(length(celltype_list)) ){
-            celltype = celltype_name = levels(mat_all$cell_type)[idx_i]
-            
-            # select the count matrix for one celltype 
-            idx = match(mat_all[ mat_all$celltype == celltype, "cell_label"], colnames(count_data2))
-            count_data_celltype = count_data2[idx_for_DE, idx] # make sure to include idx_for_DE
-            count_data_std_celltype = count_data_std2[idx_for_DE, idx]
-            
-            # 
-            idx_NT_celltype = match(mat_all$cell_label[mat_all$celltype == celltype & 
-                                                           mat_all$gene == "NT"], colnames(count_data_celltype))
-            idx_P_celltype = match(mat_all$cell_label[mat_all$celltype == celltype & 
-                                                          mat_all$gene != "NT"], colnames(count_data_celltype))
-            # do not do fold-change check, only do var and min.pct check
-            fc = apply(count_data_std_celltype, MARGIN = 1, FUN = get_fc, 
-                       idx_P = idx_P_celltype, idx_NT = idx_NT_celltype)
-            # idx_P = c(idx_P_celltype, idx_NP_celltype), idx_NT = idx_NT_celltype)
-            
-            res[paste0("fc_", celltype_name)] =  fc
+            celltype = levels(mat_all$cell_type)[idx_i]
+            # get the indices
+            idx_NT_celltype = match(mat_all$cell_label[mat_all$cell_type == celltype & 
+                                                           mat_all$gene == "NT"], colnames(object))
+            idx_P_celltype = match(mat_all$cell_label[mat_all$cell_type == celltype & 
+                                                          mat_all$gene != "NT"], colnames(object))
+            # get the fold-change and min.pct and min.cell
+            fc = FoldChange_new(object = GetAssayData(object = object, slot = "data"),
+                                cells.1 = colnames(object)[idx_NT_celltype],
+                                cells.2 = colnames(object)[idx_P_celltype],
+                                mean.fxn = function(x) log(x = rowMeans(x = expm1(x = x)) + pseudocount.use, base = base),
+                                fc.name = "avg_log2FC",
+                                features = rownames(x = object) ) 
+            fc$status = fc$avg_log2FC >= logfc.threshold & 
+                (fc$pct.1 >= min.pct | fc$pct.2 >= min.pct) & 
+                (fc$min.cell.1 >= min.cells | fc$min.cell.2 >= min.cells)
+            fc_list[[celltype]] = fc 
             rm(fc)
         }
         
+        # loop through all the cell types in the fc_list to get a index for the genes to test 
+        for( idx_i in 1:(length(celltype_list)) ){
+            celltype = levels(mat_all$cell_type)[idx_i]
+            
+            if(idx_i == 1){
+                idx_list = data.frame(celltype = fc_list[[celltype]]$status)
+                names(idx_list) = celltype
+                # 
+                fc_mat = data.frame(celltype = fc_list[[celltype]]$avg_log2FC)
+                names(fc_mat) = celltype
+            } else {
+                idx_list[[celltype]] = fc_list[[celltype]]$status
+                fc_mat[[celltype]] = fc_list[[celltype]]$avg_log2FC
+            }
+        }
+        # count all the columns and get a single index vector
+        idx_for_DE = which(apply(X = idx_list, MARGIN = 1, FUN = any))
+        # get the fold-change matrix
+        fc_mat[!as.matrix(idx_list)] = NA
+        
+        # need to add the PRTB target itself
+        idx_PRTB = which(rownames(object) %in% PRTB)
+        # merge the two indices
+        idx_for_DE = unique(c(idx_PRTB, idx_for_DE))
         
         
+        ######################################################
+        ###  the actual DE test using glmGamPoi
+        ######################################################
+        
+        if(DE_FLAG == "weighted"){
+            print(paste0(PRTB, " is running weighted DE test! "))
+            
+            ######################################################
+            # since we will use Leave-one-out to run the DE, we will need some more filterings
+            de_gene_to_rm = gsub(pattern = "weight_", replacement = "", x = grep(pattern = "weight_", x = colnames(mat_all), value = T))
+            de_gene_to_rm = unique(c(PRTB, de_gene_to_rm) )
+            
+            # this is the index for genes using LOO DE (see below for the 2nd DE step)
+            idx_LOO_rm = which(row.names(object) %in% de_gene_to_rm)
+            # this is the filtered index for genes using standard DE (the 1st DE step)
+            idx_for_DE = setdiff(idx_for_DE, idx_LOO_rm)
+            
+            ##################################
+            ##    1.  standard DE test 
+            # fit the model
+            if(length(celltype_list) > 1){
+                fit_rough <- glm_gp(data = count_data2[idx_for_DE, ], 
+                                    design = ~ 0 + cell_type + log_ct, 
+                                    col_data = mat_all, 
+                                    size_factors = F, # since we have log_ct in the covariates, we do not need it. 
+                                    on_disk = FALSE)
+                # 
+                fit <- glm_gp(data = count_data2[idx_for_DE, ], 
+                              design = ~ 0 + cell_type + weight:cell_type + log_ct, 
+                              col_data = mat_all, 
+                              overdispersion = fit_rough$overdispersions, 
+                              overdispersion_shrinkage = F, 
+                              size_factors = F, # since we have log_ct in the covariates, we do not need it. 
+                              on_disk = FALSE)
+            } else {
+                # need a different model formula if only one celltype presents (or split.by = F)
+                fit_rough <- glm_gp(data = count_data2[idx_for_DE, ], 
+                                    design = ~ 1 + log_ct, 
+                                    col_data = mat_all, 
+                                    size_factors = F, # since we have log_ct in the covariates, we do not need it. 
+                                    on_disk = FALSE)
+                
+                fit <- glm_gp(data = count_data2[idx_for_DE, ], 
+                              design = ~ 1 + weight + log_ct, 
+                              col_data = mat_all, 
+                              overdispersion = fit_rough$overdispersions, 
+                              overdispersion_shrinkage = F, 
+                              size_factors = F, # since we have log_ct in the covariates, we do not need it. 
+                              on_disk = FALSE)
+            }
+            
+            # get the SE for each coefficients
+            identity_design_matrix <-  diag(nrow = ncol(fit$Beta))
+            pred <- predict(fit, se.fit = TRUE, newdata = identity_design_matrix)
+            se = pred$se.fit
+            
+            # get p-val
+            beta = fit$Beta
+            p = pchisq((beta/se)^2, df = 1, lower.tail = F)
+            p = as.data.frame(p)
+            beta = as.data.frame(beta)
+            names(p) = paste0("p_", names(p))
+            names(beta) = paste0("beta_", names(beta))
+            p$gene_ID = row.names(p)
+            res = cbind(beta, p)
+            
+            
+            ##################################
+            ##   2.  LOO DE test 
+            for(gene_rm in de_gene_to_rm){
+                idx_gene_rm = which(row.names(count_data2) == gene_rm )
+                
+                if(gene_rm == PRTB){
+                    mat_tmp = mat_all[, c("cell_type", "log_ct", "gene")]
+                    mat_tmp$weight = 0
+                    mat_tmp$weight[mat_tmp$gene != "NT"] = 1
+                } else {
+                    mat_tmp = mat_all[, c("cell_type", paste0("weight_", gene_rm), "log_ct")]
+                    names(mat_tmp) = c("cell_type", "weight", "log_ct")
+                }
+                
+                # ###
+                if(length(celltype_list) > 1){
+                    fit <- glm_gp(data = count_data2[idx_gene_rm, ], 
+                                  design = ~ 0 + cell_type + weight:cell_type + log_ct, 
+                                  col_data = mat_tmp, 
+                                  size_factors = F, # since we have log_ct in the covariates, we do not need it. 
+                                  on_disk = FALSE)
+                }else {
+                    # need a different model formula if only one celltype presents (or split.by = F)
+                    fit <- glm_gp(data = count_data2[idx_gene_rm, ], 
+                                  design = ~ 1 + weight + log_ct, 
+                                  col_data = mat_tmp, 
+                                  size_factors = F, # since we have log_ct in the covariates, we do not need it. 
+                                  on_disk = FALSE)
+                }
+                
+                
+                # get the SE for each coefficients
+                identity_design_matrix <-  diag(nrow = ncol(fit$Beta))
+                pred <- predict(fit, se.fit = TRUE, newdata = identity_design_matrix)
+                se = pred$se.fit
+                
+                # get p-val
+                beta = fit$Beta
+                p = pchisq((beta/se)^2, df = 1, lower.tail = F)
+                p = as.data.frame(p)
+                beta = as.data.frame(beta)
+                names(p) = paste0("p_", names(p))
+                names(beta) = paste0("beta_", names(beta))
+                p$gene_ID = gene_rm
+                tmp_res = cbind(beta, p)
+                
+                res = rbind(res, tmp_res)
+            }
+            
+            # make idx_for_DE complete again 
+            idx_for_DE = c( idx_for_DE, idx_LOO_rm )
+            
+        } else if (DE_FLAG == "standard"){
+            print(paste0(PRTB, " is running standard DE test! "))
+            
+            # 
+            if(length(celltype_list) > 1){
+                fit_rough <- glm_gp(data = count_data2[idx_for_DE, ], 
+                                    design = ~ 0 + cell_type + log_ct, 
+                                    col_data = mat_all, 
+                                    size_factors = F, # since we have log_ct in the covariates, we do not need it. 
+                                    on_disk = FALSE)
+                
+                fit <- glm_gp(data = count_data2[idx_for_DE, ], 
+                              design = ~ 0 + cell_type + weight:cell_type + log_ct, 
+                              col_data = mat_all, 
+                              overdispersion = fit_rough$overdispersions, 
+                              overdispersion_shrinkage = F, 
+                              size_factors = F, # since we have log_ct in the covariates, we do not need it. 
+                              on_disk = FALSE)
+            } else {
+                # need a different model formula if only one celltype presents (or split.by = F)
+                fit_rough <- glm_gp(data = count_data2[idx_for_DE, ], 
+                                    design = ~ 1 + log_ct, 
+                                    col_data = mat_all, 
+                                    size_factors = F, # since we have log_ct in the covariates, we do not need it. 
+                                    on_disk = FALSE)
+                
+                fit <- glm_gp(data = count_data2[idx_for_DE, ], 
+                              design = ~ 1 + weight + log_ct, 
+                              col_data = mat_all, 
+                              overdispersion = fit_rough$overdispersions, 
+                              overdispersion_shrinkage = F, 
+                              size_factors = F, # since we have log_ct in the covariates, we do not need it. 
+                              on_disk = FALSE)
+            }
+            
+            
+            # get the SE for each coefficients
+            identity_design_matrix <-  diag(nrow = ncol(fit$Beta))
+            pred <- predict(fit, se.fit = TRUE, newdata = identity_design_matrix)
+            se = pred$se.fit
+            
+            # get p-val
+            beta = fit$Beta
+            p = pchisq((beta/se)^2, df = 1, lower.tail = F)
+            p = as.data.frame(p)
+            beta = as.data.frame(beta)
+            names(p) = paste0("p_", names(p))
+            names(beta) = paste0("beta_", names(beta))
+            p$gene_ID = row.names(p)
+            res = cbind(beta, p)
+        }
+        
+        ###########
+        #   final step: paste the fold-change info to data.frame "res"
+        res = cbind(res, fc_mat[idx_for_DE, ])
+        res$DE_method = DE_FLAG
+        
+        # save the DE results for this PRTB to "all_res"
+        all_res[[PRTB]] = res
+        
+        print(paste0("DE test for '", PRTB, "' is completed. Number of remaining = ", length(all_PRTB_list) - match(PRTB, all_PRTB_list)))
     }
     
+    return(all_res)
 }
-    
+
 
 
 

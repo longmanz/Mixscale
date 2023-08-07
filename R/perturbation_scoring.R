@@ -64,8 +64,6 @@ PRTBScoring = function (object, assay = "PRTB", slot = "scale.data", labels = "g
 {
     print("Running PRTBScoring to calculate the perturbation scores \n")
     
-    set.seed(seed = seed)
-    
     assay <- assay %||% DefaultAssay(object = object)
     if(!assay %in% names(test@assays)){
         stop(paste0("The 'assay' being specified does not exist! Please check. Have you run CalcPerturbSig() yet?"))
@@ -160,6 +158,7 @@ PRTBScoring = function (object, assay = "PRTB", slot = "scale.data", labels = "g
                     # start to subsample the nt cells based on the desire length:
                     sub.cells.s.list.ntgd = list()
                     for (s in splits_list) {
+                        set.seed(seed = seed)
                         sub.cells.s.list.ntgd[[s]] <- sample(x = cells.s.list.ntgd[[s]], size = desire.length.ntgd[s])
                     }
                     
@@ -237,6 +236,7 @@ PRTBScoring = function (object, assay = "PRTB", slot = "scale.data", labels = "g
                 # start to subsample the nt cells based on the desire length:
                 sub.cells.s.list.nt = list()
                 for (s in splits_list) {
+                    set.seed(seed = seed)
                     sub.cells.s.list.nt[[s]] <- sample(x = cells.s.list.nt[[s]], size = desire.length.nt[s])
                 }
                 
