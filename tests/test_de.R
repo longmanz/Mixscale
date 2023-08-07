@@ -1,19 +1,26 @@
-
+library(Seurat)
+library(SeuratObject)
+library(glmGamPoi)
+source("/Users/uqljian5/Documents/github_repo/Perturbation_Scoring/R/get_fold_change.R")
+source("/Users/uqljian5/Documents/github_repo/Perturbation_Scoring/R/perturbation_scoring.R")
+source("/Users/uqljian5/Documents/github_repo/Perturbation_Scoring/R/scoring_de.R")
 
 
 test = readRDS("/Users/uqljian5/Desktop/Lab_stuffs_NYGC/Paper_information_gathering/results/gRNA_efficiency/plot_2023Jun05/IFNG_Batch2_LOOv3_Parse_2023Jan04.rds")
 test = test[[1]]
-test = subset(test, subset = gene %in% c("NT", "IFNGR1", "ZC3H3"))
+test = subset(test, subset = gene %in% c("NT", "IFNGR1", "ZC3H3", "TSC22D1"))
 
 old_score = Tool(test, slot = "RunMixscape_LOOv3")
 saveRDS(test, file = "/Users/uqljian5/Documents/github_repo/test_data/subset_IFNG_Batch2_Parse_2023Jan04.rds")
 saveRDS(old_score, file = "/Users/uqljian5/Documents/github_repo/test_data/old_score_IFNG_Batch2_Parse_2023Jan04.rds")
 
 
-test = readRDS(file = "/Users/uqljian5/Documents/github_repo/test_data/subset_IFNG_Batch2_Parse_2023Jan04.rds")
+object = readRDS(file = "/Users/uqljian5/Documents/github_repo/test_data/subset_IFNG_Batch2_Parse_2023Jan04.rds")
+DefaultAssay(object) = "RNA"
+object[['PRTB']] = NULL
 
-test <- CalcPerturbSig(
-    object = test, 
+object <- CalcPerturbSig(
+    object = object, 
     assay = "RNA", 
     slot = "data", 
     gd.class ="gene", 
@@ -25,8 +32,8 @@ test <- CalcPerturbSig(
     split.by = "cell_type")
 
 
-test1 = PRTBScoring(
-    object = test, 
+object = PRTBScoring(
+    object = object, 
     assay = "PRTB", 
     slot = "scale.data", 
     labels = "gene", 
@@ -37,19 +44,6 @@ test1 = PRTBScoring(
     de.assay = "RNA",
     max.de.genes = 100, 
     prtb.type = "P", new.class.name = "mixscape_v1", fine.mode = F, fine.mode.labels = "NT", harmonize = T, seed = 1)
-
-test2 = PRTBScoring(
-    object = test, 
-    assay = "PRTB", 
-    slot = "scale.data", 
-    labels = "gene", 
-    nt.class.name = "NT", 
-    min.de.genes = 5, 
-    split.by = "cell_type", 
-    logfc.threshold = 0.2,
-    de.assay = "RNA",
-    max.de.genes = 100, 
-    prtb.type = "P", new.class.name = "mixscape_v1", fine.mode = F, fine.mode.labels = "NT", harmonize = T)
 
 
 new_score = Tool(test1, slot = "PRTBScoring")
@@ -84,6 +78,6 @@ res = scoringDE(object = object, assay = "PRTB", slot = "data", labels = "gene",
                 pseudocount.use = 0.1, 
                 base = 2,
                 min.pct = 0.1, 
-                min.cells = 5)
+                min.cells = 10)
 
 

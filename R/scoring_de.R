@@ -34,7 +34,6 @@ NULL
 #' @export
 #' @concept perturbation_scoring
 
-
 scoringDE = function (object, assay = "PRTB", slot = "data", labels = "gene", 
                       nt.class.name = "NT", verbose = FALSE, 
                       split.by = "cell_type",
@@ -43,7 +42,8 @@ scoringDE = function (object, assay = "PRTB", slot = "data", labels = "gene",
                       pseudocount.use = 0.1, 
                       base = 2,
                       min.pct = 0.1, 
-                      min.cells = 5) {
+                      min.cells = 10) 
+{
     # 
     print("Running scoring DE test!\n")
     
@@ -402,7 +402,6 @@ scoringDE = function (object, assay = "PRTB", slot = "data", labels = "gene",
                               on_disk = FALSE)
             }
             
-            
             # get the SE for each coefficients
             identity_design_matrix <-  diag(nrow = ncol(fit$Beta))
             pred <- predict(fit, se.fit = TRUE, newdata = identity_design_matrix)
@@ -432,10 +431,4 @@ scoringDE = function (object, assay = "PRTB", slot = "data", labels = "gene",
     
     return(all_res)
 }
-
-
-
-
-
-
 

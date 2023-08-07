@@ -65,7 +65,7 @@ PRTBScoring = function (object, assay = "PRTB", slot = "scale.data", labels = "g
     print("Running PRTBScoring to calculate the perturbation scores \n")
     
     assay <- assay %||% DefaultAssay(object = object)
-    if(!assay %in% names(test@assays)){
+    if(!assay %in% names(object@assays)){
         stop(paste0("The 'assay' being specified does not exist! Please check. Have you run CalcPerturbSig() yet?"))
     }
     
