@@ -76,6 +76,14 @@ x = FoldChange_new(object = GetAssayData(object = test1, slot = "data"),
                features = rownames(x = test1) ) 
 
 
-
+res = scoringDE(object = object, assay = "PRTB", slot = "data", labels = "gene", 
+                nt.class.name = "NT", verbose = FALSE, 
+                split.by = "cell_type",
+                total_ct_labels = "nCount_RNA",  
+                logfc.threshold = 0.2, 
+                pseudocount.use = 0.1, 
+                base = 2,
+                min.pct = 0.1, 
+                min.cells = 5)
 
 

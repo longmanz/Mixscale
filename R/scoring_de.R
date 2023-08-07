@@ -43,7 +43,7 @@ scoringDE = function (object, assay = "PRTB", slot = "data", labels = "gene",
                       pseudocount.use = 0.1, 
                       base = 2,
                       min.pct = 0.1, 
-                      min.cells = 3) {
+                      min.cells = 5) {
     # 
     print("Running scoring DE test!\n")
     
@@ -206,9 +206,15 @@ scoringDE = function (object, assay = "PRTB", slot = "data", labels = "gene",
                                 mean.fxn = function(x) log(x = rowMeans(x = expm1(x = x)) + pseudocount.use, base = base),
                                 fc.name = "avg_log2FC",
                                 features = rownames(x = object) ) 
+            # overall filtering (including fold-change)
             fc$status = fc$avg_log2FC >= logfc.threshold & 
                 (fc$pct.1 >= min.pct | fc$pct.2 >= min.pct) & 
                 (fc$min.cell.1 >= min.cells | fc$min.cell.2 >= min.cells)
+            
+            # filtering on pct and min.cells (genes will be filtered if these two criteria are not met)
+            fc$status2 = (fc$pct.1 >= min.pct | fc$pct.2 >= min.pct) & 
+                (fc$min.cell.1 >= min.cells | fc$min.cell.2 >= min.cells)
+            
             fc_list[[celltype]] = fc 
             rm(fc)
         }
@@ -219,19 +225,22 @@ scoringDE = function (object, assay = "PRTB", slot = "data", labels = "gene",
             
             if(idx_i == 1){
                 idx_list = data.frame(celltype = fc_list[[celltype]]$status)
+                idx_list2 = data.frame(celltype = fc_list[[celltype]]$status2)
                 names(idx_list) = celltype
                 # 
                 fc_mat = data.frame(celltype = fc_list[[celltype]]$avg_log2FC)
                 names(fc_mat) = celltype
             } else {
                 idx_list[[celltype]] = fc_list[[celltype]]$status
+                idx_list2[[celltype]] = fc_list[[celltype]]$status2
+                
                 fc_mat[[celltype]] = fc_list[[celltype]]$avg_log2FC
             }
         }
         # count all the columns and get a single index vector
         idx_for_DE = which(apply(X = idx_list, MARGIN = 1, FUN = any))
         # get the fold-change matrix
-        fc_mat[!as.matrix(idx_list)] = NA
+        fc_mat[!as.matrix(idx_list2)] = NA
         
         # need to add the PRTB target itself
         idx_PRTB = which(rownames(object) %in% PRTB)
