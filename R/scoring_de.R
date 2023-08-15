@@ -162,6 +162,7 @@ scoringDE = function (object, assay = "PRTB", slot = "data", labels = "gene",
             rm(tmp)
             mat_all$log_ct = log10(mat_all$nCount_RNA)
             mat_all = mat_all[order(mat_all$weight), ]
+            rownames(mat_all) = 1:nrow(mat_all)
             
             # DE Flag:
             DE_FLAG = "standard"

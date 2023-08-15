@@ -4,6 +4,7 @@ library(glmGamPoi)
 source("/Users/uqljian5/Documents/github_repo/Perturbation_Scoring/R/get_fold_change.R")
 source("/Users/uqljian5/Documents/github_repo/Perturbation_Scoring/R/perturbation_scoring.R")
 source("/Users/uqljian5/Documents/github_repo/Perturbation_Scoring/R/scoring_de.R")
+source("/Users/uqljian5/Documents/github_repo/Perturbation_Scoring/R/glm_gp_disp_only.R")
 
 
 test = readRDS("/Users/uqljian5/Desktop/Lab_stuffs_NYGC/Paper_information_gathering/results/gRNA_efficiency/plot_2023Jun05/IFNG_Batch2_LOOv3_Parse_2023Jan04.rds")

@@ -133,11 +133,50 @@ system.time(expr = {
 
 
 
+####################################################
+##  test done on Aug 10: 
+###  we want to see if we can further accelerate the DE by omitting the beta estimation process in step 1
 
+# the original strategy 
+system.time(expr = {
+    fit_rough <- glm_gp(data = count_data2[idx_for_DE, ], 
+                        design = ~ 0 + cell_type + log_ct, 
+                        col_data = mat_all, 
+                        size_factors = F, # since we have log_ct in the covariates, we do not need it. 
+                        on_disk = FALSE, 
+                        subsample = 2000)
+    # 
+    fit <- glm_gp(data = count_data2[idx_for_DE, ], 
+                  design = ~ 0 + cell_type + weight:cell_type + log_ct, 
+                  col_data = mat_all, 
+                  overdispersion = fit_rough$overdispersions, 
+                  overdispersion_shrinkage = F, 
+                  size_factors = F, # since we have log_ct in the covariates, we do not need it. 
+                  on_disk = FALSE)
+})
+ 
+#    user  system elapsed 
+# 388.896  20.997 411.444 
 
-
-
-
+####### 
+#  what if we omit the beta part in the first step ?
+system.time(expr = {
+    fit_rough <- glm_gp_disp_only(data = count_data2[idx_for_DE, ], 
+                        design = ~ 0 + cell_type + log_ct, 
+                        col_data = mat_all, 
+                        size_factors = F, # since we have log_ct in the covariates, we do not need it. 
+                        on_disk = FALSE)
+    # 
+    fit <- glm_gp(data = count_data2[idx_for_DE, ], 
+                  design = ~ 0 + cell_type + weight:cell_type + log_ct, 
+                  col_data = mat_all, 
+                  overdispersion = fit_rough$overdispersions, 
+                  overdispersion_shrinkage = F, 
+                  size_factors = F, # since we have log_ct in the covariates, we do not need it. 
+                  on_disk = FALSE)
+})
+# user  system elapsed 
+# 375.123  15.035 391.660 
 
 
 
