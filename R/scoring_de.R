@@ -1,4 +1,5 @@
 #' @include get_fold_change.R
+#' @include glm_gp_disp_only.R
 #'
 NULL
 
@@ -270,7 +271,7 @@ scoringDE = function (object, assay = "PRTB", slot = "data", labels = "gene",
             ##    1.  standard DE test 
             # fit the model
             if(length(celltype_list) > 1){
-                fit_rough <- glm_gp(data = count_data2[idx_for_DE, ], 
+                fit_rough <- glm_gp_disp_only(data = count_data2[idx_for_DE, ], 
                                     design = ~ 0 + cell_type + log_ct, 
                                     col_data = mat_all, 
                                     size_factors = F, # since we have log_ct in the covariates, we do not need it. 
@@ -285,7 +286,7 @@ scoringDE = function (object, assay = "PRTB", slot = "data", labels = "gene",
                               on_disk = FALSE)
             } else {
                 # need a different model formula if only one celltype presents (or split.by = F)
-                fit_rough <- glm_gp(data = count_data2[idx_for_DE, ], 
+                fit_rough <- glm_gp_disp_only(data = count_data2[idx_for_DE, ], 
                                     design = ~ 1 + log_ct, 
                                     col_data = mat_all, 
                                     size_factors = F, # since we have log_ct in the covariates, we do not need it. 
@@ -373,7 +374,7 @@ scoringDE = function (object, assay = "PRTB", slot = "data", labels = "gene",
             
             # 
             if(length(celltype_list) > 1){
-                fit_rough <- glm_gp(data = count_data2[idx_for_DE, ], 
+                fit_rough <- glm_gp_disp_only(data = count_data2[idx_for_DE, ], 
                                     design = ~ 0 + cell_type + log_ct, 
                                     col_data = mat_all, 
                                     size_factors = F, # since we have log_ct in the covariates, we do not need it. 
@@ -388,7 +389,7 @@ scoringDE = function (object, assay = "PRTB", slot = "data", labels = "gene",
                               on_disk = FALSE)
             } else {
                 # need a different model formula if only one celltype presents (or split.by = F)
-                fit_rough <- glm_gp(data = count_data2[idx_for_DE, ], 
+                fit_rough <- glm_gp_disp_only(data = count_data2[idx_for_DE, ], 
                                     design = ~ 1 + log_ct, 
                                     col_data = mat_all, 
                                     size_factors = F, # since we have log_ct in the covariates, we do not need it. 

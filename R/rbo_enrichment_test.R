@@ -32,6 +32,20 @@ rbo <- function(list1, list2, p, k=floor(max(length(list1), length(list2))/2), s
 }
 
 
+rbo2 <- function(list1, list2, p, k=floor(max(length(list1), length(list2))/2), side=c("top", "bottom"), mid = NULL, uneven.lengths = TRUE) {
+    side <- match.arg(side)
+    if (!is.numeric(list1) | !is.numeric(list2))
+        stop("Input vectors are not numeric.")
+    if (is.null(names(list1)) | is.null(names(list2)))
+        stop("Input vectors are not named.")
+    ids <- switch(side,
+                  "top"=list(list1=.select.ids(list1, "top", mid), list2=.select.ids(list2, "top", mid)),
+                  "bottom"=list(list1=.select.ids(list1, "bottom", mid), list2=.select.ids(list2, "bottom", mid))
+    )
+    min(1, rbo_ext(ids$list1, ids$list2, p, k, uneven_lengths = uneven.lengths))
+}
+
+
 #' Select top or bottom names of ranked vector
 #' 
 #' @author Fabian Schmich ("gespeR" package)
@@ -79,17 +93,17 @@ rbo <- function(list1, list2, p, k=floor(max(length(list1), length(list2))/2), s
         L <- x
     }
     l <- min(k, length(L))
-    list1 <- min(k, length(S))
+    s <- min(k, length(S))
     
     if (uneven.lengths) {
         Xd <- sapply(1:l, function(i) length(intersect(S[1:i], L[1:i])))
         ((1-p) / p) *
             ((sum(Xd[seq(1, l)] / seq(1, l) * p^seq(1, l))) +
-                 (sum(Xd[list1] * (seq(list1+1, l) - list1) / (list1 * seq(list1+1, l)) * p^seq(list1+1, l)))) +
-            ((Xd[l] - Xd[list1]) / l + (Xd[list1] / list1)) * p^l  
+                 (sum(Xd[s] * (seq(s+1, l) - s) / (s * seq(s+1, l)) * p^seq(s+1, l)))) +
+            ((Xd[l] - Xd[s]) / l + (Xd[s] / s)) * p^l  
     } else {
-        #stopifnot(l == list1)
-        k <- min(list1, k)
+        #stopifnot(l == s)
+        k <- min(s, k)
         Xd <- sapply(1:k, function(i) length(intersect(x[1:i], y[1:i])))
         Xk <- Xd[k]
         (Xk / k) * p^k + (((1-p)/p) * sum((Xd / seq(1,k)) * p^seq(1,k)))
@@ -129,8 +143,13 @@ rbo_enrich_test <- function(input_list,
                             side=c("top", "bottom"), 
                             mid = NULL, 
                             uneven.lengths = TRUE, 
-                            empirical_test = TRUE, 
+                            empirical_test = FALSE, 
                             seed = 131415926) {
+    if(length(input_list) < 5){
+        print("The length of the input list is less than 5, stopping analysis...")
+        return(NULL)
+    }
+    
     # 0. each vector in the go_term_db is assumed to be an ordered vector of characters (gene names). 
     #    we need to convert each vector in to a named vector of number (number being the rank of each gene). 
     go_term_db2 = lapply(X = go_term_db, 
@@ -155,8 +174,9 @@ rbo_enrich_test <- function(input_list,
     set.seed(seed)
     
     # Shuffle the input_list for n_iter times (shuffled matrix has n_iter columns)
-    shuffled_matrix <- replicate(n_iter, sample(input_list))
-    rownames(shuffled_matrix) = names(input_list)
+    max_d = ifelse(k >= length(input_list), yes = length(input_list), no = k)
+    shuffled_matrix <- replicate(n_iter, sample(input_list[1:max_d]))
+    rownames(shuffled_matrix) = names(input_list[1:max_d])
     
     # Function to calculate rbo for each go_term against the shuffled matrix
     calculate_rbo <- function(go_term) {
@@ -197,18 +217,18 @@ rbo_enrich_test <- function(input_list,
                          n_GO_term = sapply(X = go_term_db2, FUN = length), 
                          n_intersect = sapply(X = go_term_db, FUN = function(x, y) length(intersect(x, y)), y = names(input_list)))
     # 
+    res_dat$Pval[res_dat$n_intersect <= 1 | res_dat$RBO <= 0.01 ] = 1
     return(res_dat)
 }
 
 
+# 
+gs = function(d, p){
+    (1-p)*p^(d-1)
+}
 
-
-
-
-
-
-
-
-
+gs_seq = function(d, p){
+    return(gs(1:d, p))
+}
 
 
