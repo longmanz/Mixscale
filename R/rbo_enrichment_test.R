@@ -32,18 +32,18 @@ rbo <- function(list1, list2, p, k=floor(max(length(list1), length(list2))/2), s
 }
 
 
-rbo2 <- function(list1, list2, p, k=floor(max(length(list1), length(list2))/2), side=c("top", "bottom"), mid = NULL, uneven.lengths = TRUE) {
-    side <- match.arg(side)
-    if (!is.numeric(list1) | !is.numeric(list2))
-        stop("Input vectors are not numeric.")
-    if (is.null(names(list1)) | is.null(names(list2)))
-        stop("Input vectors are not named.")
-    ids <- switch(side,
-                  "top"=list(list1=.select.ids(list1, "top", mid), list2=.select.ids(list2, "top", mid)),
-                  "bottom"=list(list1=.select.ids(list1, "bottom", mid), list2=.select.ids(list2, "bottom", mid))
-    )
-    min(1, rbo_ext(ids$list1, ids$list2, p, k, uneven_lengths = uneven.lengths))
-}
+# rbo2 <- function(list1, list2, p, k=floor(max(length(list1), length(list2))/2), side=c("top", "bottom"), mid = NULL, uneven.lengths = TRUE) {
+#     side <- match.arg(side)
+#     if (!is.numeric(list1) | !is.numeric(list2))
+#         stop("Input vectors are not numeric.")
+#     if (is.null(names(list1)) | is.null(names(list2)))
+#         stop("Input vectors are not named.")
+#     ids <- switch(side,
+#                   "top"=list(list1=.select.ids(list1, "top", mid), list2=.select.ids(list2, "top", mid)),
+#                   "bottom"=list(list1=.select.ids(list1, "bottom", mid), list2=.select.ids(list2, "bottom", mid))
+#     )
+#     min(1, rbo_ext(ids$list1, ids$list2, p, k, uneven_lengths = uneven.lengths))
+# }
 
 
 #' Select top or bottom names of ranked vector
