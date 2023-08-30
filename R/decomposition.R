@@ -227,11 +227,11 @@ get_sig_genes = function(perm_obj = NULL,
 }
 
 
-
 #' A wrapper for different hierarchical clustering methods to be applied to the within-cell-type
-#' cross-conditions Z-score matrix. Highly similar conditions (columns) will be grouped together 
+#' cross-conditions Z-score matrix (input). Highly similar conditions (columns) will be grouped together 
 #' given the DE Z-scores of rows (genes). 
 #' 
+#' @export
 #' @param mat the Z-score matrix to perform the permutation test. 
 #' Rows are the gene and columns are the conditions/samples.
 #' @param cor_method the method to calculate the correlation matrix. see cor() 
@@ -247,14 +247,12 @@ get_sig_genes = function(perm_obj = NULL,
 #' 2. a object of the output object from protocut() (if MinMax hclust method is selected) or 
 #' from cutree() (if other hclust method is selected)
 #' 
-#' 
 
-HclustTest = function(mat = NULL, 
+DEhclust = function(mat = NULL, 
                       cor_method = c("pearson", "kendall", "spearman"), 
                       hclust_method = "minmax", 
                       dist_thres = 0.6,
                       ...){
-
     # skip if the number of column is <= 2
     if(ncol(mat) <= 2){
         stop("The number of columns in the input matrix is less than 3. Hierarchical clustering cannot be applied.")
@@ -275,8 +273,8 @@ HclustTest = function(mat = NULL,
                  "\n----------------------------------------", call. = FALSE)
         }
         # 
-        mat.tree = protoclust(mat.dist)
-        mat.cut <- protocut(mat.tree, h = dist_thres)
+        mat.tree = protoclust::protoclust(mat.dist)
+        mat.cut <- protoclust::protocut(mat.tree, h = dist_thres)
         cl = mat.cut$cl  # the cluster assignment
     } else {
         mat.tree <- hclust(mat.dist, method="single")
@@ -305,8 +303,413 @@ HclustTest = function(mat = NULL,
 }
 
 
+#' A function to perform MultiCCA analysis (main function imported from package "PMA", 
+#' see PMID 19377034 for details of the algorithm) that takes in a list of multiple 
+#' Z-score matrices to find the canonical variates (CVs) that maximize the cross-matrices 
+#' correlation. The MultiCCA process is modified so that it is not completed in one 
+#' run when multiple rounds of CVs are desired. Instead, after each MultiCCA run, we will
+#' identify the columns (samples) from each matrix that highly correlate with the CV of that 
+#' matrix, and extract + remove them from the matrix. The next MultiCCA is performed to the 
+#' list of such "filtered" matrices. This process is repeated until the desired number of 
+#' runs is reached (set by users) or the CVs across the matrices have very low correlation 
+#' coefficients. 
+#' 
+#' @export
+#' @param mat_list the list of >= 2 DE Z-score matrices for the multiCCA analysis. Each matrix
+#' should have the same named rows, but can have different number of columns (samples). 
+#' @param penalty to indicate if penalty should be applied during the multiCCA process. When set
+#' to "FALSE", no penalty will be applied so that the results are not forced to be "sparse". However,
+#' if a single value or a vector of k values (k should be the same as the number of matrices in the
+#' input list), then L1 penalty will be applied to each matrix to force the output CVs to be sparse. 
+#' See MultiCCA() from the PMA package for details. 
+#' @param standardize a boolen value to indicate whether to standardize each column before running 
+#' the MultiCCA. Default is FALSE.
+#' @param max_k the maximum number of MultiCCA runs. MultiCCA will be repeated until this number is 
+#' reached or the CVs across the matrices have very low correlation coefficients.
+#' 
+#' @param cor_num for each column of a matrix, the number of CVs that it needs to be significantly correlated 
+#' with to be selected as a member of the program. Default is "all", meaning it needs to be significantly 
+#' correlated with all other CVs. Alternatively, users may input a integer (e.g., 2, 3, ...).
+#' 
+#' @param mean_cor_thres During the multiCCA analysis, if any of the input matrix has significantly 
+#' low(er) correlation with other matrices, it will impact the MultiCCA process. This is the threshold
+#' to remove such matrices. If (the CV of) any matrix has a mean correlation coefficient <= 0.2, it will 
+#' be removed and the MultiCCA will be repeated for this round (k-th). Note that this matrix will be appended 
+#' back to the list for the next round (k+1-th) of MultiCCA, and the same filtering will be repeated. 
+#' Default is 0.2. Set it to 0 to avoid such filtering. 
+#' 
+#' 
+#' @seealso [MultiCCA()]
+#' @return 
 
+DEmultiCCA = function(mat_list = NULL, 
+                      penalty = FALSE, 
+                      standardize = FALSE, 
+                      max_k = 5, 
+                      cor_num = "all",
+                      mean_cor_thres = 0.2, 
+                      flag_cor_num = T,
+                      flag_loose = F,
+                      pval_thres = 0.05,
+                      cor_coef_thres = 0.6,
+                      preset_max_PC = T, 
+                      
+                      ...){
+    # first, check if PMA is installed. 
+    PMA.installed <- PackageCheck("PMA", error = FALSE)
+    if (!PMA.installed[1]) {
+        stop("Please install the PMA package to use the actual MultiCCA method.", 
+             "\nThis can be accomplished with the following command: ", 
+             "\n----------------------------------------", "\ninstall.packages('PMA')", 
+             "\n----------------------------------------", call. = FALSE)
+    }
+    
+    # check if each of the matrix in the mat_list is named
+    if(is.null(names(mat_list))){
+        stop("The elements in the mat_list must be named. Please check.")
+    }
+    
+    # check if each matrix in the mat_list has rownames and colnames
+    # and check if the rownames of each matrix are the same 
+    flag_same_rownames <- TRUE
+    for(i in 1:length(mat_list)){
+        if(is.null(rownames(mat_list[[i]])) | is.null(colnames(mat_list[[i]]))){
+            stop(paste("The", i, "-th matrix in mat_list does not have proper rownames/colnames. Please check."))
+        }
+        if(i == 1){
+            first_matrix_row_names <- rownames(mat_list[[i]])
+        } else {
+            if (! identical(rownames(mat_list[[i]]), first_matrix_row_names)) {
+                same_row_names <- FALSE
+                stop(paste("The", i, "-th matrix seems to have different rownames from others. Please check!"))
+            }
+        }
+    }
+    
+    ##########################################
+    #   empty lists to keep track of the multiCCA process
+    rm_X = list()      # keep record of the matrix that has mean_cor <= mean_cor_thres
+    single_X = list()  # keep record of the matrix that has only 1 column
+    res_MultiCCA = list()  # the list to store the output from each round of MultiCCA
+    
+    # run through max_k rounds of MultiCCA
+    for(k in 1:max_k){
 
+        # this is a flag 
+        flag_rm_any_celltype = T
+        
+        # check if there is any removed matrix from last round 
+        # that needs to be appended back to the list
+        if(k == 1){
+            X2 = mat_list
+        } else if(length(rm_X) != 0){
+            X2 = c(X2, rm_X)
+            rm_X = list()
+        } 
+        
+        # check if the input list of matrices of each round is legit for MultiCCA. 
+        # any matrix has mean_cor (across cor_coefs with other matrices) <= mean_cor_thres 
+        # will be removed and the MultiCCA will be re-done for this round.
+        while (flag_rm_any_celltype == T) {
+            # check if there is any matrix only has 1 column. Remove them 
+            for(CELLTYPE in names(X2)){
+                if(ncol(X2[[CELLTYPE]]) == 1){
+                    single_X[[CELLTYPE]] = X2[[CELLTYPE]]
+                    X2[[CELLTYPE]] = NULL
+                } else if (ncol(X2[[CELLTYPE]]) < 1){
+                    X2[[CELLTYPE]] = NULL
+                }
+            }        
+            
+            # the names of each matrix
+            celltype_list = names(X2)
+            
+            # set the penalty vector for the MultiCCA (penalty controls the sparsity of the CVs)
+            if (penalty = F){
+                penalties = sapply(X2, FUN = function(x) sqrt(ncol(x))*1 )
+            } else if (length(penalty) == 1) {
+                penalties = rep(penalty, length(X2))
+            } else {
+                stop("Currently we do not support MultiCCA with multiple different penalty values. sorry.")
+            }
+
+            # run MultiCCA() from PMA package. 
+            out <- MultiCCA(X2, type=rep("standard",length(X2)),
+                            penalty= penalties,niter = 30,
+                            ncomponents=1, trace = F, standardize = standardize)
+            
+            # add col-/row-names to the CVs
+            names(out$ws) <- names(X2)
+            for(i in names(X2)){
+                colnames(out$ws[[i]]) <- paste0("MCP", 1)
+                rownames(out$ws[[i]]) <- colnames(X2[[i]])
+            }
+            
+            # get the columns with non-zero loadings if penalty is not set to 1 (sparsity is forced)
+            MCP_PRTB_list = list()
+            for(CELLTYPE in celltype_list){
+                idx = which(out$ws[[CELLTYPE]][,1] != 0)
+                MCP_PRTB_list[[CELLTYPE]] = rownames(out$ws[[CELLTYPE]])[idx]
+            }
+            
+            # calculate CCA canonical variates for each matrix
+            variates_list = list()
+            for(CELLTYPE in celltype_list){
+                if(standardize == F){
+                    PRTB_variates = as.matrix(X2[[CELLTYPE]]) %*% out$ws[[CELLTYPE]][,1]
+                } else {
+                    PRTB_variates = scale(as.matrix(X2[[CELLTYPE]])) %*% out$ws[[CELLTYPE]][,1]
+                }
+                variates_list[[CELLTYPE]] = PRTB_variates
+            }
+            
+            # if single_X is not empty, paste it back to variates
+            if(length(single_X) != 0){
+                for(CELLTYPE in names(single_X)){
+                    variates_list[[CELLTYPE]] = single_X[[CELLTYPE]]
+                    X2[[CELLTYPE]] = single_X[[CELLTYPE]]
+                    MCP_PRTB_list[[CELLTYPE]] = colnames(single_X[[CELLTYPE]])
+                    single_X[[CELLTYPE]] = NULL
+                }
+            }
+            
+            # calculate cor_mat and its row_mean (without diagonal elements)
+            cor_mat = cor(Reduce(cbind, variates_list), use = "complete.obs")
+            cor_mat = abs(cor_mat)
+            mean_cor = vector()
+            for(i in 1:ncol(cor_mat)){
+                mean_cor = c(mean_cor, mean(cor_mat[i, -i]))
+            }
+            
+            # now check if any of the mean_cor is <= mean_cor_thres; if so, 
+            # remove that matrix from the mat_list and re-do the MultiCCA. 
+            if(any(mean_cor < mean_cor_thres)){
+                idx_mat_rm = which.min(mean_cor)
+                rm_X[[names(X2)[idx_mat_rm]]] = X2[[idx_mat_rm]]
+                X2[[idx_mat_rm]] = NULL
+            } else {
+                flag_rm_any_celltype = F
+            }
+            
+            # stop if X2 only has 1 matrix left 
+            if(length(X2) <= 1){
+                print(paste("During the", k, "-th MultiCCA, the process has no matrix with mean_cor >=", 
+                            mean_cor_thres, "\nTherefore stopping the process."))
+                break()
+            }
+        }
+        
+        # this is a check after the break() from above loop: 
+        # we will stop the whole MultiCCA process here and 
+        # return whatever has been obtained from previous rounds of MultiCCA.
+        if(length(X2) <= 1){
+            print("Stopping the MultiCCA process due to not enough number ( < 2) of correlated matrices! \n")
+            max_k = k-1
+            # return(res)
+        }
+        
+        # get the names of all the matrices (re-doing this step because we might 
+        # have removed some matrices)
+        celltype_list = names(X2)
+        
+        # this is an important step: need to define the number of correlation.
+        if (cor_number == "all"){
+            cor_num = length(celltype_list)
+        } else if (cor_number > length(celltype_list)){
+            cor_num = length(celltype_list)
+        }
+        
+        # save the MCP list
+        # saveRDS(MCP_PRTB_list, file = paste0("MCP", k, "_sparse_", sparsity, "_Parse_", PATHWAY, "_MCP_PRTB_list.rds"))
+        
+        # save the CCA variates
+        # saveRDS(variates_list, file = paste0("Variates_MCP", k, "_sparse_", sparsity, "_Parse_", PATHWAY, ".rds"))
+        
+        
+        ####################################################################
+        #  in the following steps, for each matrix we will perform correlation tests between 
+        #  its CV and all its columns. We will extract the columns that is significantly 
+        #  correlated with at least cor_num CVs. 
+        ####################################################################
+        
+        # some lists to store the intermediate results  
+        mean_cor_coef_list = list()
+        cor_coef_mat_list = list()
+        pvec_mat_BH_list = list()
+        pvec_mat_list = list()
+        
+        for(CELLTYPE in celltype_list){
+            pvec_mat = matrix(NA, nrow = length(variates_list), ncol = ncol(X2[[CELLTYPE]]))
+            cor_coef_mat = matrix(NA, nrow = length(variates_list), ncol = ncol(X2[[CELLTYPE]]))
+            
+            for(idx in 1:length(variates_list)){
+                ## original part 
+                pvec = apply(X = X2[[CELLTYPE]], MARGIN = 2,
+                             FUN = function(x, y){
+                                 return(cor.test(x, y)$p.value)
+                             }, 
+                             variates_list[[idx]])
+                cor_coef = apply(X = X2[[CELLTYPE]], MARGIN = 2,
+                                 FUN = cor, 
+                                 variates_list[[idx]])
+                pvec_mat[idx, ] = pvec
+                cor_coef_mat[idx, ] = cor_coef
+                colnames(pvec_mat) = colnames(cor_coef_mat) = colnames(X2[[CELLTYPE]])
+                
+            }
+            # print(CELLTYPE)
+            # print(pvec_mat)
+            # print(cor_coef_mat)
+            
+            pvec_mat_BH = p.adjust(pvec_mat, method = "BH")
+            pvec_mat_BH = matrix(pvec_mat_BH, nrow = length(variates_list))
+            
+            colnames(pvec_mat_BH) = colnames(pvec_mat)
+            
+            # Aug 23 added
+            cor_coef_mat_list[[CELLTYPE]] = cor_coef_mat
+            pvec_mat_BH_list[[CELLTYPE]] = pvec_mat_BH
+            pvec_mat_list[[CELLTYPE]] = pvec_mat
+            
+            # back to original procedure
+            mean_cor_coef_list[[CELLTYPE]] = colMeans(cor_coef_mat[, , drop = F])
+            
+        }
+        
+        # modified on 2023 Jan 23, here we will check the 
+        rm_row_idx = vector()
+        pvec_mat_list_qc = list()
+        
+        for(idx_mat in 1:length(pvec_mat_list)){
+            CELLTYPE = names(pvec_mat_list)[idx_mat]
+            tmp = pvec_mat_list[[idx_mat]]
+            tmp2 = cor_coef_mat_list[[idx_mat]][idx_mat, ]
+            
+            # 1. p-value thresholding 
+            idx_pval = abs(tmp) <= pval_thres
+            # 2. cor_coef thresholding
+            idx_cor_coef = abs(tmp2) >= cor_coef_thres
+            idx_cor_coef = matrix(data = idx_cor_coef, ncol = length(idx_cor_coef), nrow = nrow(tmp), byrow = T)
+            # generate a neigboring graph
+            tmp[idx_pval & idx_cor_coef] = 1
+            tmp[!(idx_pval & idx_cor_coef)] = 0
+            
+            # 3. cor_coef thresholding
+            # idx_cor_coef2 = abs(tmp2) >= 0.8
+            # idx_cor_coef2 = matrix(data = idx_cor_coef2, ncol = length(idx_cor_coef2), nrow = nrow(tmp), byrow = T)
+            # tmp[idx_cor_coef2] = 1
+            
+            # 
+            if(all(tmp[-idx_mat, ] == 0)){
+                rm_row_idx = c(rm_row_idx, idx_mat)
+            }
+            
+            colnames(tmp) = paste0(CELLTYPE, "__", colnames(tmp))
+            pvec_mat_list_qc[[CELLTYPE]] = tmp
+        }
+        
+        if(length(rm_row_idx) != 0){
+            # remove the corresponding matrix 
+            for(idx_rm in rm_row_idx){
+                pvec_mat_list_qc[[idx_rm]] = NULL
+            }
+            # remove the rows of those corresponding matrix
+            for(idx in 1:length(pvec_mat_list_qc)){
+                tmp = pvec_mat_list_qc[[idx]]
+                tmp = tmp[-rm_row_idx, , drop = F]
+                pvec_mat_list_qc[[idx]] = tmp
+            }
+            # adjust the cor_num
+            if(cor_num > length(pvec_mat_list_qc)){
+                cor_num = length(pvec_mat_list_qc)
+            }
+        }
+        
+        # merge them into one matrix
+        test = Reduce(cbind, pvec_mat_list_qc)
+        
+        if(ncol(test) <= 1 | nrow(test) <= 1){
+            print("No more correlated columns are detected by MultiCCA (flag = 0). Terminating...")
+            max_k = k-1
+            break()
+        }
+        
+        # remove non-relevant column with no correlated CV
+        order_1 = colSums(test)
+        order_2 = duplicated(t(test)) | duplicated(t(test), fromLast = T)
+        test = test[, order(order_1, order_2, decreasing = T)]
+        
+        test = test[, colSums(test) > 0]
+        if(ncol(test) <= 1){
+            print("No more correlated columns are detected by MultiCCA (flag = 1). Terminating...")
+            max_k = k-1
+            break()
+        }
+        
+        # modified on 2023 Jan 23: 
+        
+        # here we will assert if cor_num is satisfied; 
+        slct_cor_PRTB = vector()
+        if (flag_loose == T) {
+            if (cor_num > 2){
+                slct_cor_PRTB =  colnames(test[, colSums(test) >= (cor_num - 1)])
+            } else {
+                slct_cor_PRTB =  colnames(test[, colSums(test) >= cor_num ])
+            }
+        } else if(flag_loose == F & sum(colSums(test) >= cor_num) > 1){
+            slct_cor_PRTB = colnames(test[, colSums(test) >= cor_num])
+        } else if (flag_loose == F & flag_cor_num == T){
+            # we will gradually reduce cor_num by 1.
+            cor_num = cor_num - 1
+            while(cor_num > 1 & length(slct_cor_PRTB) <= 1){
+                slct_cor_PRTB =  colnames(test[, colSums(test) >= cor_num])
+                cor_num = cor_num - 1
+            }
+        } else {
+            print("No more correlated columns are detected by MultiCCA (flag = 2). Terminating...")
+            max_k = k-1
+            break()
+        }
+        
+        if(length(slct_cor_PRTB) <= 1){
+            print("No more correlated columns are detected by MultiCCA (flag = 3). Terminating...")
+            max_k = k-1
+            break()
+        }
+        
+        # re-store the celltype and PRTB_names
+        slct_cor_PRTB = unlist(strsplit(slct_cor_PRTB, split = "__"))
+        slct_cor_PRTB = as.data.frame(matrix(slct_cor_PRTB, byrow = T, ncol=2))
+        # 
+        cor_PRTB_list = list()
+        shared_PRTB_list = list()
+        for(CELLTYPE in unique(slct_cor_PRTB$V1)){
+            cor_PRTB_list[[CELLTYPE]] = slct_cor_PRTB[slct_cor_PRTB$V1 == CELLTYPE, "V2"]
+            shared_PRTB_list[[CELLTYPE]] = intersect(cor_PRTB_list[[CELLTYPE]], MCP_PRTB_list[[CELLTYPE]])
+        }
+        
+        # 
+        saveRDS(mean_cor_coef_list, file = paste0("MCP", k, "_sparse_", sparsity, "_Parse_", PATHWAY, "_mean_cor_coef_list.rds"))
+        saveRDS(cor_PRTB_list, file = paste0("MCP", k, "_sparse_", sparsity, "_Parse_", PATHWAY, "_cor_PRTB_list.rds"))
+        saveRDS(shared_PRTB_list, file = paste0("MCP", k, "_sparse_", sparsity, "_Parse_", PATHWAY, "_shared_PRTB_list.rds"))
+        
+        # remove those PRTBs from mat_list 
+        for(CELLTYPE in celltype_list){
+            if(length(cor_PRTB_list[[CELLTYPE]]) != 0 & length(X2[[CELLTYPE]]) != 0){
+                rm_idx = which(colnames(X2[[CELLTYPE]]) %in% cor_PRTB_list[[CELLTYPE]])
+                X2[[CELLTYPE]] = X2[[CELLTYPE]][, -rm_idx, drop=F]
+            }
+            # 
+            if(length(X2[[CELLTYPE]]) == 0){
+                X2[[CELLTYPE]] = NULL
+                print(paste("\nCelltype", CELLTYPE, "is now empty in mat_list! \n"))
+            }
+        }
+        
+    }
+    
+    
+}
 
 
 
