@@ -25,7 +25,10 @@
 #' @param num_iter the number of iteration for the permutation test.
 #' 
 #' @param seed seed for random number generator.
-#' @return a scaler value measuring the rank biased overlap (rbo)
+#' @return a list object consists of 3 elements: the original input Z-score matrix,
+#' the p-value matrix produced by the permutation test for each genes (same dimension 
+#' as the original input matrix), and the prcomp() object done for the input Z-score 
+#' matrix.
 #' 
 
 PCApermtest = function(mat = NULL, k = 1, var_prop = 0.1, 
@@ -88,11 +91,13 @@ PCApermtest = function(mat = NULL, k = 1, var_prop = 0.1,
 
 }
 
+
 #' The function will load the pval matrix calculated from PCApermtest() and 
 #' return the significant rows (usually genes) given the threshold that users
 #' provide. 
 #' 
 #' @export
+#' @param perm_obj the list object produces by the PCApermtest() function.
 #' @param k the number of top PCs to extract. If set to NULL, the 
 #' function will determine the number of PCs to extract based on 
 #' the var_prop, which is the cut-off on the proportion of variance 
@@ -122,7 +127,9 @@ PCApermtest = function(mat = NULL, k = 1, var_prop = 0.1,
 #' genes from the top k PCs should be return together as one gene list (collapse = T) 
 #' or separately for each k (collapse = F). Default is T.
 #' 
-#' 
+#' @return a list of significant genes (gene IDs) selected from the output of PCApermtest. 
+#'  The order of genes in each gene list indicates the significance of P-value (high
+#'  significance at the top).
 
 get_sig_genes = function(perm_obj = NULL, 
                          k = 1, 
@@ -218,6 +225,88 @@ get_sig_genes = function(perm_obj = NULL,
     }
 
 }
+
+
+
+#' A wrapper for different hierarchical clustering methods to be applied to the within-cell-type
+#' cross-conditions Z-score matrix. Highly similar conditions (columns) will be grouped together 
+#' given the DE Z-scores of rows (genes). 
+#' 
+#' @param mat the Z-score matrix to perform the permutation test. 
+#' Rows are the gene and columns are the conditions/samples.
+#' @param cor_method the method to calculate the correlation matrix. see cor() 
+#' function for details. 
+#' @param hclust_method the method to perform the hierarchical clustering. The default method
+#' is MinMax clustering (package 'protoclust' required). Other methods available in the hclust()
+#' function is also allowed. 
+#' @param dist_thres The distance to cut the hierarchical clustering tree ("tree height"). See cutree() 
+#' function for details. Default is 0.6.
+#' 
+#' @return return a list of two object: 1. a list of the cluster assignment of the 
+#' columns (only those got successfully assigned to a multi-member cluster will be stored).
+#' 2. a object of the output object from protocut() (if MinMax hclust method is selected) or 
+#' from cutree() (if other hclust method is selected)
+#' 
+#' 
+
+HclustTest = function(mat = NULL, 
+                      cor_method = c("pearson", "kendall", "spearman"), 
+                      hclust_method = "minmax", 
+                      dist_thres = 0.6,
+                      ...){
+
+    # skip if the number of column is <= 2
+    if(ncol(mat) <= 2){
+        stop("The number of columns in the input matrix is less than 3. Hierarchical clustering cannot be applied.")
+    }
+    
+    # calculate the distance matrix ( = 1 - correlation_matrix)
+    cor_mat = abs(cor(mat, method = cor_method))
+    mat.dist = as.dist(1 - cor_mat)
+    
+    # run the hclust using the input method
+    if(hclust_method == "minmax"){
+        # check if the required package is installed or not
+        protoclust.installed <- PackageCheck("protoclust", error = FALSE)
+        if (!protoclust.installed[1]) {
+            stop("Please install the protoclust package to use MinMax hierarchical clustering method.", 
+                 "\nThis can be accomplished with the following command: ", 
+                 "\n----------------------------------------", "\ninstall.packages('protoclust')", 
+                 "\n----------------------------------------", call. = FALSE)
+        }
+        # 
+        mat.tree = protoclust(mat.dist)
+        mat.cut <- protocut(mat.tree, h = dist_thres)
+        cl = mat.cut$cl  # the cluster assignment
+    } else {
+        mat.tree <- hclust(mat.dist, method="single")
+        mat.cut <- cutree(mat.tree, h = dist_thres)
+        cl = mat.cut
+    }
+    
+    # count of elements/points in each cluster, save the IDs of any cluster that has >= 2 members
+    ct_pt = table(cl)
+    slct_cluster = names(ct_pt)[which(ct_pt > 1)]
+    slct_cluster = as.integer(slct_cluster)
+    
+    #  save the cluster information (members) for those slct_cluster
+    cluster_list = list()
+    t = 1
+    for(num_cluster in slct_cluster){
+        item = names(cl)[cl == num_cluster]
+        cluster_list[[t]] = item
+        t = t + 1
+    }
+    
+    # return the cluster information
+    return(list = c(cluster_assignment = cluster_list, 
+                    full_obj = mat.cut))
+
+}
+
+
+
+
 
 
 
