@@ -9,6 +9,8 @@ NULL
 #' function). It is calculated by using the large-effect DE genes from raw DE tests between the 
 #' perturbed and non-perturbed gRNA expressing cells. 
 #'
+#' @export
+#' 
 #' @inheritParams Seurat::FindMarkers
 #' @param object An object of class Seurat.
 #' @param assay Assay to use for mixscape classification.
@@ -50,7 +52,6 @@ NULL
 #' 
 #' @return Returns a Seurat object containing the perturbation scores. It is stored in the Tool Data of the object, not in the 
 #' meta.data. 
-#' @export
 #' @concept perturbation_scoring
 
 PRTBScoring = function (object, assay = "PRTB", slot = "scale.data", labels = "gene", 
