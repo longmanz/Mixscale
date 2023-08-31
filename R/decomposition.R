@@ -1,6 +1,7 @@
+#'
+NULL
+
 #' PCA, MinMax clustering, and MultiCCA analyses, as well as the PCA-based permutation test.
-
-
 #' The PCA-based permutation test. This function will load in a DE test Z-score
 #' matrix, and perform PCA to it to get the 1st to k-th PCs. Then it will permuate
 #' the matrix and then the same PCA analysis will be performed. By default, this process
@@ -505,7 +506,7 @@ DEmultiCCA = function(mat_list = NULL,
         if(length(X2) <= 1){
             print("Stopping the MultiCCA process due to not enough number ( < 2) of correlated matrices! \n")
             max_k = k-1
-            # return(res)
+            return(res)
         }
         
         # get the names of all the matrices (re-doing this step because we might 
@@ -542,6 +543,7 @@ DEmultiCCA = function(mat_list = NULL,
             pvec_mat = matrix(NA, nrow = length(variates_list), ncol = ncol(X2[[CELLTYPE]]))
             cor_coef_mat = matrix(NA, nrow = length(variates_list), ncol = ncol(X2[[CELLTYPE]]))
             
+            # calculate the correlation between each CV and each column
             for(idx in 1:length(variates_list)){
                 ## original part 
                 pvec = apply(X = X2[[CELLTYPE]], MARGIN = 2,
@@ -557,10 +559,8 @@ DEmultiCCA = function(mat_list = NULL,
                 colnames(pvec_mat) = colnames(cor_coef_mat) = colnames(X2[[CELLTYPE]])
                 
             }
-            # print(CELLTYPE)
-            # print(pvec_mat)
-            # print(cor_coef_mat)
             
+            # We will adjust the correlation P-values for multiple testing using BH
             pvec_mat_BH = p.adjust(pvec_mat, method = "BH")
             pvec_mat_BH = matrix(pvec_mat_BH, nrow = length(variates_list))
             
@@ -599,7 +599,7 @@ DEmultiCCA = function(mat_list = NULL,
             # idx_cor_coef2 = matrix(data = idx_cor_coef2, ncol = length(idx_cor_coef2), nrow = nrow(tmp), byrow = T)
             # tmp[idx_cor_coef2] = 1
             
-            # 
+            # if 
             if(all(tmp[-idx_mat, ] == 0)){
                 rm_row_idx = c(rm_row_idx, idx_mat)
             }
@@ -631,7 +631,7 @@ DEmultiCCA = function(mat_list = NULL,
         if(ncol(test) <= 1 | nrow(test) <= 1){
             print("No more correlated columns are detected by MultiCCA (flag = 0). Terminating...")
             max_k = k-1
-            break()
+            return(res)
         }
         
         # remove non-relevant column with no correlated CV
@@ -643,7 +643,7 @@ DEmultiCCA = function(mat_list = NULL,
         if(ncol(test) <= 1){
             print("No more correlated columns are detected by MultiCCA (flag = 1). Terminating...")
             max_k = k-1
-            break()
+            return(res)
         }
         
         # modified on 2023 Jan 23: 
@@ -668,13 +668,13 @@ DEmultiCCA = function(mat_list = NULL,
         } else {
             print("No more correlated columns are detected by MultiCCA (flag = 2). Terminating...")
             max_k = k-1
-            break()
+            return(res)
         }
         
         if(length(slct_cor_PRTB) <= 1){
             print("No more correlated columns are detected by MultiCCA (flag = 3). Terminating...")
             max_k = k-1
-            break()
+            return(res)
         }
         
         # re-store the celltype and PRTB_names
@@ -689,9 +689,13 @@ DEmultiCCA = function(mat_list = NULL,
         }
         
         # 
-        saveRDS(mean_cor_coef_list, file = paste0("MCP", k, "_sparse_", sparsity, "_Parse_", PATHWAY, "_mean_cor_coef_list.rds"))
-        saveRDS(cor_PRTB_list, file = paste0("MCP", k, "_sparse_", sparsity, "_Parse_", PATHWAY, "_cor_PRTB_list.rds"))
-        saveRDS(shared_PRTB_list, file = paste0("MCP", k, "_sparse_", sparsity, "_Parse_", PATHWAY, "_shared_PRTB_list.rds"))
+        # saveRDS(mean_cor_coef_list, file = paste0("MCP", k, "_sparse_", sparsity, "_Parse_", PATHWAY, "_mean_cor_coef_list.rds"))
+        # saveRDS(cor_PRTB_list, file = paste0("MCP", k, "_sparse_", sparsity, "_Parse_", PATHWAY, "_cor_PRTB_list.rds"))
+        # saveRDS(shared_PRTB_list, file = paste0("MCP", k, "_sparse_", sparsity, "_Parse_", PATHWAY, "_shared_PRTB_list.rds"))
+        
+        res[[paste0("Program", k)]] = list(mean_cor_coef_list = mean_cor_coef_list, 
+                                           cor_PRTB_list = cor_PRTB_list, 
+                                           shared_PRTB_list = shared_PRTB_list)
         
         # remove those PRTBs from mat_list 
         for(CELLTYPE in celltype_list){
@@ -708,6 +712,7 @@ DEmultiCCA = function(mat_list = NULL,
         
     }
     
+    return(res)
     
 }
 
