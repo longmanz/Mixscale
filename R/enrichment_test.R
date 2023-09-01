@@ -1,10 +1,21 @@
+#'
+NULL
+
+#' This script contains functions for enrichment test: 1. standard enrichment test method based on
+#' Fisher's exact test, which looks at if the overlap between the input gene list and the go-term 
+#' gene set is significantly larger than the overlap between the background control gene list and the go-term
+#' gene set. 2. a new enrichment test method using the rank biased overlap (RBO, Webber et al. 2010), which not only quantifies the 
+#' overlap between the input gene list and the go-term gene set, but also quantify if the rank of the 2 lists 
+#' are concordant or not. It can be viewed as a weighted Jaccard index that puts decreasing weights to each 
+#' rank. 
+
+
+
 #' Functions for a new gene-set enrichment test based on the 
 #' RBO (rank biased overlap) calculation with extropolation (Webber et al., 2010).
 #' The core functions of rbo() calculation was modified from the "gespeR" package (original author: Fabian Schmich). 
 #' We modified it to accomodate our package and data type. We also developed a permutation scheme for 
 #' RBO to allow for p-value calculations. 
-
-
 #' @author Fabian Schmich ("gespeR" package)
 #' @export
 #' 
@@ -111,7 +122,6 @@ rbo <- function(list1, list2, p, k=floor(max(length(list1), length(list2))/2), s
 }
 
 
-#' 
 #'
 #' Function to perform enrichment test based on rbo(). 
 #'
@@ -222,13 +232,136 @@ rbo_enrich_test <- function(input_list,
 }
 
 
-# 
-gs = function(d, p){
-    (1-p)*p^(d-1)
-}
-
+#' get the weight of each depth till 'd' given a weight parameter 'p'
+#' @noRd
+#' @return a numeric vector of the weights from rank depth 1 to d.
 gs_seq = function(d, p){
+    gs = function(d, p){
+        (1-p)*p^(d-1)
+    }
     return(gs(1:d, p))
 }
+
+
+
+#' This script is for the conventional Fisher's exact test enrichment method (adopted from DAVID GO analysis).
+#' 
+#' @export
+#' 
+#' @param input_list the input gene list 
+#' @param background the background gene list (usually the expressed genes where the 
+#' input gene list is generate from, ).
+#' @param go_term_db a list of gene-lists (GO term). It should be a list contain multiple named vector, 
+#' and each vector should be a vector of multiple marker/signature genes for some biological pathway/process.
+#' @param list_gene A Boolen value to indicate if the overlapping genes between the input gene list and 
+#' the GO-term should be output as well.
+#' @param EASE A Boolen value to indicate if the EASE correction should be applied (see 
+#' https://david.ncifcrf.gov/helps/functional_annotation.html). This is useful to mitigate the 
+#' small-sample inflation when the input gene list is short (e.g., < 10).
+#' 
+#' @return a data frame contains the enrichment test results. Each row contains the P-value and enrichment odds
+#' ratio calculated from a Fisher's exact test for one GO-term in the go_term_db. 
+
+fisher_enrich_test = function(input_list = NULL, 
+                   background = NULL, 
+                   go_term_db = NULL, 
+                   list_gene = F, 
+                   EASE = F){
+    PT = length(background)
+    
+    # if go_term_db is a list of lists, Reduce it down to a list of vector (remove all the intermediate layers)
+    while(class(go_term_db[[1]]) == "list"){
+        go_term_db = Reduce(c, go_term_db)
+    }
+    
+    if(list_gene == F){
+        dat = matrix(nrow = length(go_term_db), ncol = 6)
+        i = 1
+        for(GO_TERM in names(go_term_db)){
+            PH = length(intersect(go_term_db[[GO_TERM]], background))
+            LT = length(input_list)
+            
+            # LH_list = intersect(input_list, go_term_db[[GO_TERM]])
+            LH = length(intersect(input_list, go_term_db[[GO_TERM]]))
+            
+            # the Fisher exact test with EASE correction
+            dat2 = matrix(data = c(LH-1, PH-LH+1, LT-LH, PT-LT-(PH-LH)), byrow = T, ncol = 2)
+            # print(dat2)
+            if(LH < 1 | EASE == T){
+                dat2 = matrix(data = c(LH, PH-LH, LT-LH, PT-LT-(PH-LH)), byrow = T, ncol = 2)
+            }
+            # 
+            res = fisher.test(dat2, alternative = "greater")
+            # 
+            dat[i, 1] = GO_TERM
+            dat[i, 2] = res$estimate
+            dat[i, 3] = res$p.value
+            dat[i, 4] = -log(res$p.value)*res$estimate
+            dat[i, 5] = LH
+            dat[i, 6] = PH
+            # 
+            i = i + 1
+        }
+        dat = as.data.frame(dat)
+        dat = dat[complete.cases(dat), ]
+        names(dat) = c("GO_term", "OR", "Pval", "combined_score", "num_LH", "num_PH")
+        
+    } else {
+        dat = matrix(nrow = length(go_term_db), ncol = 7)
+        i = 1
+        for(GO_TERM in names(go_term_db)){
+            PH = length(intersect(go_term_db[[GO_TERM]], background))
+            LT = length(input_list)
+            
+            LH_list = intersect(input_list, go_term_db[[GO_TERM]])
+            LH = length(LH_list)
+            
+            # the Fisher exact test with EASE correction
+            dat2 = matrix(data = c(LH-1, PH-LH+1, LT-LH, PT-LT-(PH-LH)), byrow = T, ncol = 2)
+            # print(dat2)
+            if(LH < 1){
+                dat2 = matrix(data = c(LH, PH-LH, LT-LH, PT-LT-(PH-LH)), byrow = T, ncol = 2)
+            }
+            # 
+            res = fisher.test(dat2, alternative = "greater")
+            # 
+            dat[i, 1] = GO_TERM
+            dat[i, 2] = res$estimate
+            dat[i, 3] = res$p.value
+            dat[i, 4] = -log(res$p.value)*res$estimate
+            dat[i, 5] = LH
+            dat[i, 6] = PH
+            dat[i, 7] = paste0(LH_list, collapse = ";")
+            
+            # 
+            i = i + 1
+        }
+        dat = as.data.frame(dat)
+        dat = dat[complete.cases(dat), ]
+        names(dat) = c("GO_term", "OR", "Pval", "combined_score", "num_LH", "num_PH", "overlap_gene")
+        
+    }
+    
+    dat$OR = as.numeric(dat$OR)
+    dat$Pval = as.numeric(dat$Pval)
+    dat$num_LH = as.integer(dat$num_LH)
+    dat$num_PH = as.integer(dat$num_PH)
+    return(dat)
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
