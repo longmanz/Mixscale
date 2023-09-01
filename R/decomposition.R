@@ -79,12 +79,13 @@ PCApermtest = function(mat = NULL, k = 1, var_prop = 0.1,
         ecdf_fun = ecdf(null_pc[, i])
         tmp_pval = sapply(X = test$x[, i], FUN = ecdf_fun)
         if(i == 1){
-            pval = tmp_pval
+            pval = matrix(data = tmp_pval, ncol = 1)
         } else {
             pval = cbind(pval, tmp_pval)
         }
     }
     colnames(pval) = paste0("PC", 1:ncol(null_pc))
+    rownames(pval) = rownames(mat)
     
     return(list(mat = mat, 
                 pmat = pval, 
@@ -172,14 +173,15 @@ get_sig_genes = function(perm_obj = NULL,
     slct_pval = pval[, max_PC_idx, drop = F]
     
     # extract the sig elements for each PC
-    z_threshold = sqrt(qchisq(ori_pval_thres, df=1, lower=F))
+    pval_threshold = ori_pval_thres
+    z_threshold = sqrt(qchisq(pval_threshold, df=1, lower=F))
     # 
     for(i in 1:max_PC_idx){
         topDEG_idx = list()
         bottomDEG_idx = list()
         
         cor_test = cor(test$x[,i], mat)
-        print(cor_test)
+        # print(cor_test)
         PRTB_idx = which(abs(cor_test) >= cor_threshold)
         
         topDEG = which(slct_pval[, i] >= 1 - pval_threshold & apply(mat[, PRTB_idx, drop=F], MARGIN = 1, FUN = function(x) any(abs(x) >= z_threshold) ))
@@ -266,13 +268,13 @@ DEhclust = function(mat = NULL,
     # run the hclust using the input method
     if(hclust_method == "minmax"){
         # check if the required package is installed or not
-        protoclust.installed <- PackageCheck("protoclust", error = FALSE)
-        if (!protoclust.installed[1]) {
-            stop("Please install the protoclust package to use MinMax hierarchical clustering method.", 
-                 "\nThis can be accomplished with the following command: ", 
-                 "\n----------------------------------------", "\ninstall.packages('protoclust')", 
-                 "\n----------------------------------------", call. = FALSE)
-        }
+        # protoclust.installed <- PackageCheck("protoclust", error = FALSE)
+        # if (!protoclust.installed[1]) {
+        #     stop("Please install the protoclust package to use MinMax hierarchical clustering method.", 
+        #          "\nThis can be accomplished with the following command: ", 
+        #          "\n----------------------------------------", "\ninstall.packages('protoclust')", 
+        #          "\n----------------------------------------", call. = FALSE)
+        # }
         # 
         mat.tree = protoclust::protoclust(mat.dist)
         mat.cut <- protoclust::protocut(mat.tree, h = dist_thres)
@@ -298,10 +300,55 @@ DEhclust = function(mat = NULL,
     }
     
     # return the cluster information
-    return(list = c(cluster_assignment = cluster_list, 
-                    full_obj = mat.cut))
-
+    return(list(cluster_assignment = cluster_list, 
+                full_obj = mat.cut,
+                mat = mat))
+    
 }
+
+
+#' This function will use the output from the DEhclust() and get the necessary elements for PCApermtest():
+#' For each cluster of columns being identified, this function will create a truncated sub-matrix given 
+#' the original Z-score matrix. The sub-matrix will only contains the selected columns, and they will be input
+#' to the PCApermtest() and get_sig_genes() to get the gene signatures for this cluster. This process will
+#' be repeated for each cluster. 
+#' 
+#' @export
+#' @param obj The results object produced by DEhclust() function. 
+#' 
+#' @return return a list of vectors, and each vector contains the signature genes identified for each cluster.
+#' 
+
+get_sig_genes_DEhclust = function(obj = NULL, 
+                                  ...){
+    # first run PCApermtest using the output from DEhclust() for each of the cluster 
+    res_list = list()
+    for(i in 1:length(obj$cluster_assignment)){
+        # get the members (column names) for cluster i
+        cluster_idx = obj$cluster_assignment[[i]]
+        
+        # run PCApermtest for them
+        perm_res = PCApermtest(mat = obj$mat[, cluster_idx], 
+                               k = 1, var_prop = 0.1, 
+                               center = T, scale = T, 
+                               num_iter = 200)
+        sig_genes = get_sig_genes(perm_obj = perm_res, 
+                                  k = 1, 
+                                  var_prop = NULL,
+                                  var_prop_total = NULL,
+                                  perm_pval_thres = 0.05, 
+                                  ori_pval_thres = 1.666667e-06, 
+                                  cor_threshold = 0.2, 
+                                  collapse = T)
+        res_list[[paste0(cluster_idx, collapse = "_")]] = list(sig_genes = sig_genes, 
+                                                               perm_res = perm_res)
+    }
+    return(res_list)
+    
+}
+
+
+
 
 
 #' A function to perform MultiCCA analysis (main function imported from package "PMA", 
@@ -354,7 +401,6 @@ DEmultiCCA = function(mat_list = NULL,
                       pval_thres = 0.05,
                       cor_coef_thres = 0.6,
                       preset_max_PC = T, 
-                      
                       ...){
     # first, check if PMA is installed. 
     PMA.installed <- PackageCheck("PMA", error = FALSE)
@@ -506,7 +552,8 @@ DEmultiCCA = function(mat_list = NULL,
         if(length(X2) <= 1){
             print("Stopping the MultiCCA process due to not enough number ( < 2) of correlated matrices! \n")
             max_k = k-1
-            return(res)
+            return(list(results = res, 
+                        mat_list = mat_list))
         }
         
         # get the names of all the matrices (re-doing this step because we might 
@@ -631,7 +678,8 @@ DEmultiCCA = function(mat_list = NULL,
         if(ncol(test) <= 1 | nrow(test) <= 1){
             print("No more correlated columns are detected by MultiCCA (flag = 0). Terminating...")
             max_k = k-1
-            return(res)
+            return(list(results = res, 
+                        mat_list = mat_list))
         }
         
         # remove non-relevant column with no correlated CV
@@ -643,7 +691,8 @@ DEmultiCCA = function(mat_list = NULL,
         if(ncol(test) <= 1){
             print("No more correlated columns are detected by MultiCCA (flag = 1). Terminating...")
             max_k = k-1
-            return(res)
+            return(list(results = res, 
+                        mat_list = mat_list))
         }
         
         # modified on 2023 Jan 23: 
@@ -668,13 +717,15 @@ DEmultiCCA = function(mat_list = NULL,
         } else {
             print("No more correlated columns are detected by MultiCCA (flag = 2). Terminating...")
             max_k = k-1
-            return(res)
+            return(list(results = res, 
+                        mat_list = mat_list))
         }
         
         if(length(slct_cor_PRTB) <= 1){
             print("No more correlated columns are detected by MultiCCA (flag = 3). Terminating...")
             max_k = k-1
-            return(res)
+            return(list(results = res, 
+                        mat_list = mat_list))
         }
         
         # re-store the celltype and PRTB_names
@@ -712,9 +763,21 @@ DEmultiCCA = function(mat_list = NULL,
         
     }
     
-    return(res)
+    return(list(results = res, 
+                mat_list = mat_list))
     
 }
+
+
+#' This function will use the output from the DEmultiCCA() and get the neccessary elements for PCApermtest
+get_sig_genes_DEmultiCCA = function(obj = NULL, 
+                                    ...){
+    
+}
+
+
+
+
 
 
 
