@@ -43,8 +43,8 @@ DE_heatmap = function(obj = NULL,
                       labRow = T,
                       output_path = "./",
                       prefix = "heatmap",
-                      height = 10, 
-                      width = 6,
+                      height = 15, 
+                      width = 12,
                       ...){
     # adjust the parameters to make them compatitble to heatmap.2()
     if(labRow == T){
@@ -104,7 +104,8 @@ DE_heatmap = function(obj = NULL,
                   symbreaks = symbreaks, 
                   col = col3, trace="none", 
                   keysize = 1.5, 
-                  lhei = c(1.5, 11))
+                  lhei = c(1.5, 11), 
+                  main = paste0(prefix))
         dev.off()
         
     } else if(type == "hclust"){
@@ -159,7 +160,8 @@ DE_heatmap = function(obj = NULL,
                       symbreaks = symbreaks, 
                       col = col3, trace="none", 
                       keysize = 1.5, 
-                      lhei = c(1.5, 11))
+                      lhei = c(1.5, 11), 
+                      main = paste0(prefix, ", ", "cluster ", i))
             dev.off()
             
         }
@@ -210,13 +212,14 @@ DE_heatmap = function(obj = NULL,
             heatmap.2(as.matrix(tmp[ slct_idx, , drop=F]), 
                       labRow = labRow,
                       Rowv = F, Colv  = T, 
-                      dendrogram = "none", margins = c(10, 10), 
+                      dendrogram = "none", margins = c(13, 10), 
                       notecol = "black", notecex = 0.3, 
                       cexRow = 1.2, cexCol = 1.4, 
                       symbreaks = symbreaks, 
                       col = col3, trace="none", 
                       keysize = 1.5, 
-                      lhei = c(1.5, 11))
+                      lhei = c(1.5, 11), 
+                      main = paste0(prefix, ", ", "Program ", i))
             dev.off()
         }
     } else {

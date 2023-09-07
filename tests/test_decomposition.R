@@ -254,9 +254,12 @@ length(intersect(sig_genes$Program1$sig_genes$downDEGs[1:300], ori_db$TNFA$TNFA_
 
 
 
-###############################################
-# now proceed to visualization. 
-
+### visualization. 
+DE_heatmap(obj = res, sig_genes = sig_genes, 
+           type = "multiCCA", direction = "both", 
+           top_n = 50, labRow = F, output_path = "/Users/uqljian5/Desktop/test_multiCCA/", 
+           prefix = "TGFB1", 
+           height = 15, width = 12)
 
 
 
