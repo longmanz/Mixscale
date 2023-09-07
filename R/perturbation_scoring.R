@@ -11,7 +11,9 @@ NULL
 #'
 #' @export
 #' 
-#' @inheritParams Seurat::FindMarkers
+#' @inheritParams Seurat::RunMixscape
+#' @import Seurat
+#' 
 #' @param object An object of class Seurat.
 #' @param assay Assay to use for mixscape classification.
 #' @param slot Assay data slot to use.

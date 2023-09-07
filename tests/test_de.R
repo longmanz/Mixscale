@@ -47,7 +47,7 @@ object = PRTBScoring(
     prtb.type = "P", new.class.name = "mixscape_v1", fine.mode = F, fine.mode.labels = "NT", harmonize = T, seed = 1)
 
 
-new_score = Tool(test1, slot = "PRTBScoring")
+new_score = Tool(object, slot = "PRTBScoring")
 new_score2 = Tool(test2, slot = "PRTBScoring")
 
 

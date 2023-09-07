@@ -21,6 +21,9 @@ NULL
 #' @param var_prop if k is not set, then use this value as a cutoff for 
 #' %var explained to select the PCs. Only the PCs with %var larger than this 
 #' value will be selected (the top k PCs). 
+#' @param var_prop_total similar to var_prop. The accumulated sum of the %var
+#' of the top i = 1, 2, ... PCs will be calculated, and the top k PCs with the 
+#' accumulated sum larger than this value to be selected. 
 #' @param center a boolen value to indicate whether the column will be centered.
 #' @param scale a boolen value to indicate whether the column will be scaled to 1.
 #' @param num_iter the number of iteration for the permutation test.
@@ -32,13 +35,30 @@ NULL
 #' matrix.
 #' 
 
-PCApermtest = function(mat = NULL, k = 1, var_prop = 0.1, 
+PCApermtest = function(mat = NULL, k = 1, 
+                       var_prop = NULL, 
+                       var_prop_total = NULL,
                        center = T, scale = T, 
+                       row_filtering_pval = 0.05,
                        num_iter = 200, 
                        seed = 123124125,
                        ...){
     # set the random seed 
     set.seed(seed = seed)
+    
+    # filter the row if row_filtering_pval is set:
+    if(!is.null(row_filtering_pval) ){
+        if(row_filtering_pval > 0 & row_filtering_pval <= 1){
+            rm_row_idx = which( apply(mat, MARGIN = 1, FUN = function(x) all(abs(x) < sqrt(qchisq(row_filtering_pval, df = 1, lower.tail = F)) )) )
+            print(paste("Removing", length(rm_row_idx), "rows given the row_filtering_pval =", row_filtering_pval))
+            # remove rows if there is any un-qualified row
+            if(length(rm_row_idx) != 0){
+                mat = mat[-rm_row_idx, , drop = F]
+            }
+        } else {
+            print("Please set a valid row_filtering_pval that is between 0 and 1.")
+        }
+    } 
     
     # perform standard PCA (centering and scaling) for the input mat
     test = prcomp(mat, center = center, scale. = scale)
@@ -47,16 +67,19 @@ PCApermtest = function(mat = NULL, k = 1, var_prop = 0.1,
     prop_test = test$sdev^2/sum(test$sdev^2)
     
     # if k is not set, we will determine it based on the %var by each PC
-    if(is.null(k) & !is.null(var_prop)){
-        # we will only use those PCs with %var >= 10% 
+    if(!is.null(k)){
+        # 
+    } else if (is.null(k) & !is.null(var_prop)) {
         k = tail(which(prop_test >= var_prop), 1)
-        # check if none of the PC has %var >= prop_var.
         if(length(k) == 0){
             stop(paste("None of the PC has %var >=", var_prop, ". Please use a lower value."))
         }
-    } else if (is.null(k) & is.null(var_prop)){
-        stop(paste("Neither k or var_prop is provided. Please specify one of them."))
+    } else if (is.null(k) & is.null(var_prop) & !is.null(var_prop_total)){
+        k = which( cumsum(prop_test) >= var_prop_total )[1]
+    } else {
+        stop("Please provide at least one of the following paramters: k, var_prop, var_prop_total.")
     }
+    
     
     # the permutation test 
     # Preallocate memory for null_pc
@@ -64,6 +87,8 @@ PCApermtest = function(mat = NULL, k = 1, var_prop = 0.1,
     
     # Perform iterations
     for(idx_iter in 1:num_iter){
+        # set.seed(idx_iter+500)
+        
         null_tmp = apply(mat, 2, sample)
         null_test = prcomp(null_tmp, center = center, scale. = scale)
         
@@ -71,7 +96,7 @@ PCApermtest = function(mat = NULL, k = 1, var_prop = 0.1,
         start_idx <- (idx_iter - 1) * nrow(mat) + 1
         end_idx <- idx_iter * nrow(mat)
         
-        null_pc[start_idx:end_idx, ] <- null_test$x[1:k]
+        null_pc[start_idx:end_idx, ] <- null_test$x[, 1:k, drop = F]
     }
     
     #### after getting the null distribution we will now move on to pval calculation
@@ -170,23 +195,25 @@ get_sig_genes = function(perm_obj = NULL,
     }
     
     # do the selection
-    slct_pval = pval[, max_PC_idx, drop = F]
+    slct_pval = pval[, 1:max_PC_idx, drop = F]
     
     # extract the sig elements for each PC
+    # note that pval_threshold is not the same as perm_pval_thres
     pval_threshold = ori_pval_thres
     z_threshold = sqrt(qchisq(pval_threshold, df=1, lower=F))
-    # 
+    
+    ### 
+    topDEG_idx = list()
+    bottomDEG_idx = list()
     for(i in 1:max_PC_idx){
-        topDEG_idx = list()
-        bottomDEG_idx = list()
-        
+
         cor_test = cor(test$x[,i], mat)
         # print(cor_test)
         PRTB_idx = which(abs(cor_test) >= cor_threshold)
         
-        topDEG = which(slct_pval[, i] >= 1 - pval_threshold & apply(mat[, PRTB_idx, drop=F], MARGIN = 1, FUN = function(x) any(abs(x) >= z_threshold) ))
+        topDEG = which(slct_pval[, i] >= 1 - perm_pval_thres & apply(mat[, PRTB_idx, drop=F], MARGIN = 1, FUN = function(x) any(abs(x) >= z_threshold) ))
         topDEG = topDEG[order(test$x[topDEG, i], decreasing = T)]
-        bottomDEG = which(slct_pval[, i] <= pval_threshold & apply(mat[, PRTB_idx, drop=F], MARGIN = 1, FUN = function(x) any(abs(x) >= z_threshold) ))
+        bottomDEG = which(slct_pval[, i] <= perm_pval_thres & apply(mat[, PRTB_idx, drop=F], MARGIN = 1, FUN = function(x) any(abs(x) >= z_threshold) ))
         bottomDEG = bottomDEG[order(test$x[bottomDEG, i], decreasing = T)]
         
         # determine the orientation by looking at the sums of Z-score
@@ -210,8 +237,9 @@ get_sig_genes = function(perm_obj = NULL,
         topDEG_idx = Reduce(c, topDEG_idx)
         topDEG_idx = topDEG_idx[!duplicated(topDEG_idx)]
         
-        bottomDEG_idx = rev(bottomDEG_idx)
+        bottomDEG_idx = lapply(bottomDEG_idx, rev)
         bottomDEG_idx = Reduce(c, bottomDEG_idx)
+        # bottomDEG_idx = rev(bottomDEG_idx)
         bottomDEG_idx = bottomDEG_idx[!duplicated(bottomDEG_idx)]
         
         return(list(downDEGs = rownames(mat)[topDEG_idx], 
@@ -220,8 +248,8 @@ get_sig_genes = function(perm_obj = NULL,
         downDEGs = list()
         upDEGs = list()
         for(i in 1:max_PC_idx){
-            downDEGs[[names(topDEG_idx)[i]]] = rownames(mat)[topDEG_idx[[1]]]
-            upDEGs[[names(bottomDEG_idx)[i]]] = rev(rownames(mat)[bottomDEG_idx[[1]]])
+            downDEGs[[names(topDEG_idx)[i]]] = rownames(mat)[topDEG_idx[[i]]]
+            upDEGs[[names(bottomDEG_idx)[i]]] = rev(rownames(mat)[bottomDEG_idx[[i]]])
         }
         return(list(downDEGs = downDEGs, 
                     upDEGs = upDEGs))
@@ -235,6 +263,9 @@ get_sig_genes = function(perm_obj = NULL,
 #' given the DE Z-scores of rows (genes). 
 #' 
 #' @export
+#' @importFrom protoclust protoclust
+#' @importFrom protoclust protocut
+#'
 #' @param mat the Z-score matrix to perform the permutation test. 
 #' Rows are the gene and columns are the conditions/samples.
 #' @param cor_method the method to calculate the correlation matrix. see cor() 
@@ -315,12 +346,29 @@ DEhclust = function(mat = NULL,
 #' 
 #' @export
 #' @param obj The results object produced by DEhclust() function. 
+#' @inheritParams PCApermtest
+#' @inheritParams get_sig_genes
 #' 
 #' @return return a list of vectors, and each vector contains the signature genes identified for each cluster.
 #' 
 
 get_sig_genes_DEhclust = function(obj = NULL, 
+                                  k = 1, 
+                                  var_prop = NULL, 
+                                  center = T, scale = T, 
+                                  num_iter = 200, 
+                                  row_filtering_pval = 0.05, 
+                                  var_prop_total = NULL,
+                                  perm_pval_thres = 0.05, 
+                                  ori_pval_thres = 1.666667e-06, 
+                                  cor_threshold = 0.2, 
+                                  collapse = T,
                                   ...){
+    # check 
+    if(length(obj$cluster_assignment) == 0){
+        stop("The input obj is not valid. Please check.")
+    }
+    
     # first run PCApermtest using the output from DEhclust() for each of the cluster 
     res_list = list()
     for(i in 1:length(obj$cluster_assignment)){
@@ -329,26 +377,27 @@ get_sig_genes_DEhclust = function(obj = NULL,
         
         # run PCApermtest for them
         perm_res = PCApermtest(mat = obj$mat[, cluster_idx], 
-                               k = 1, var_prop = 0.1, 
-                               center = T, scale = T, 
-                               num_iter = 200)
+                               k = k, 
+                               var_prop = var_prop,
+                               var_prop_total = var_prop_total,
+                               center = center, scale = scale, 
+                               num_iter = num_iter, 
+                               row_filtering_pval = row_filtering_pval)
+        # get the sig genes given the PCApermtest object
         sig_genes = get_sig_genes(perm_obj = perm_res, 
-                                  k = 1, 
-                                  var_prop = NULL,
-                                  var_prop_total = NULL,
-                                  perm_pval_thres = 0.05, 
-                                  ori_pval_thres = 1.666667e-06, 
-                                  cor_threshold = 0.2, 
-                                  collapse = T)
+                                  k = k, 
+                                  var_prop = var_prop, 
+                                  var_prop_total = var_prop_total,
+                                  perm_pval_thres = perm_pval_thres, 
+                                  ori_pval_thres = ori_pval_thres, 
+                                  cor_threshold = cor_threshold, 
+                                  collapse = collapse)
         res_list[[paste0(cluster_idx, collapse = "_")]] = list(sig_genes = sig_genes, 
                                                                perm_res = perm_res)
     }
     return(res_list)
     
 }
-
-
-
 
 
 #' A function to perform MultiCCA analysis (main function imported from package "PMA", 
@@ -388,20 +437,20 @@ get_sig_genes_DEhclust = function(obj = NULL,
 #' 
 #' 
 #' @seealso [MultiCCA()]
-#' @return 
+#' @return a list of MultiCCA results for each program identified.
 
 DEmultiCCA = function(mat_list = NULL, 
                       penalty = FALSE, 
                       standardize = FALSE, 
                       max_k = 5, 
-                      cor_num = "all",
+                      cor_number = "all",
                       mean_cor_thres = 0.2, 
                       flag_cor_num = T,
                       flag_loose = F,
                       pval_thres = 0.05,
                       cor_coef_thres = 0.6,
                       preset_max_PC = T, 
-                      ...){
+                      ...) {
     # first, check if PMA is installed. 
     PMA.installed <- PackageCheck("PMA", error = FALSE)
     if (!PMA.installed[1]) {
@@ -437,7 +486,7 @@ DEmultiCCA = function(mat_list = NULL,
     #   empty lists to keep track of the multiCCA process
     rm_X = list()      # keep record of the matrix that has mean_cor <= mean_cor_thres
     single_X = list()  # keep record of the matrix that has only 1 column
-    res_MultiCCA = list()  # the list to store the output from each round of MultiCCA
+    res = list()  # the list to store the output from each round of MultiCCA
     
     # run through max_k rounds of MultiCCA
     for(k in 1:max_k){
@@ -472,7 +521,7 @@ DEmultiCCA = function(mat_list = NULL,
             celltype_list = names(X2)
             
             # set the penalty vector for the MultiCCA (penalty controls the sparsity of the CVs)
-            if (penalty = F){
+            if (penalty == F){
                 penalties = sapply(X2, FUN = function(x) sqrt(ncol(x))*1 )
             } else if (length(penalty) == 1) {
                 penalties = rep(penalty, length(X2))
@@ -552,8 +601,7 @@ DEmultiCCA = function(mat_list = NULL,
         if(length(X2) <= 1){
             print("Stopping the MultiCCA process due to not enough number ( < 2) of correlated matrices! \n")
             max_k = k-1
-            return(list(results = res, 
-                        mat_list = mat_list))
+            return(list(program_assignment = res, mat_list = mat_list))
         }
         
         # get the names of all the matrices (re-doing this step because we might 
@@ -678,8 +726,7 @@ DEmultiCCA = function(mat_list = NULL,
         if(ncol(test) <= 1 | nrow(test) <= 1){
             print("No more correlated columns are detected by MultiCCA (flag = 0). Terminating...")
             max_k = k-1
-            return(list(results = res, 
-                        mat_list = mat_list))
+            return(list(program_assignment = res, mat_list = mat_list))
         }
         
         # remove non-relevant column with no correlated CV
@@ -691,8 +738,7 @@ DEmultiCCA = function(mat_list = NULL,
         if(ncol(test) <= 1){
             print("No more correlated columns are detected by MultiCCA (flag = 1). Terminating...")
             max_k = k-1
-            return(list(results = res, 
-                        mat_list = mat_list))
+            return(list(program_assignment = res, mat_list = mat_list))
         }
         
         # modified on 2023 Jan 23: 
@@ -717,15 +763,13 @@ DEmultiCCA = function(mat_list = NULL,
         } else {
             print("No more correlated columns are detected by MultiCCA (flag = 2). Terminating...")
             max_k = k-1
-            return(list(results = res, 
-                        mat_list = mat_list))
+            return(list(program_assignment = res, mat_list = mat_list))
         }
         
         if(length(slct_cor_PRTB) <= 1){
             print("No more correlated columns are detected by MultiCCA (flag = 3). Terminating...")
             max_k = k-1
-            return(list(results = res, 
-                        mat_list = mat_list))
+            return(list(program_assignment = res, mat_list = mat_list))
         }
         
         # re-store the celltype and PRTB_names
@@ -763,16 +807,85 @@ DEmultiCCA = function(mat_list = NULL,
         
     }
     
-    return(list(results = res, 
-                mat_list = mat_list))
-    
+    return(list(program_assignment = res, mat_list = mat_list))
 }
 
 
-#' This function will use the output from the DEmultiCCA() and get the neccessary elements for PCApermtest
+
+
+#' This function will use the output from the DEmultiCCA() and get the neccessary elements for PCApermtest and 
+#' get the gene signatures for each perturbation program that DEmultiCCA() identifies. It works in a similar way 
+#' as get_sig_genes_DEhclust() . 
+#' 
+#' 
+#' @export
+#' 
+#' @param obj The results object produced by DEmultiCCA() function. 
+#' @inheritParams PCApermtest
+#' @inheritParams get_sig_genes
+#' 
+#' @return return a list of vectors, and each vector contains the signature genes identified for each MultiCCA program.
+#' 
+
 get_sig_genes_DEmultiCCA = function(obj = NULL, 
+                                    k = 1, 
+                                    var_prop = NULL, 
+                                    center = T, scale = T, 
+                                    num_iter = 200, 
+                                    row_filtering_pval = 0.05, 
+                                    var_prop_total = NULL,
+                                    perm_pval_thres = 0.05, 
+                                    ori_pval_thres = 1.666667e-06, 
+                                    cor_threshold = 0.2, 
+                                    collapse = T,
                                     ...){
+    # check if the input is valid:
+    if(length(obj$program_assignment) == 0){
+        stop("The input obj is not valid. Please check.")
+    }
     
+    # first run PCApermtest using the output from DEmultiCCA() for each of the cluster 
+    res_list = list()
+    
+    for(i in 1:length(obj$program_assignment)){
+        # get the members for program i
+        cluster_info = obj$program_assignment[[i]]$shared_PRTB_list
+        
+        # loop through all the cell type and get the corresponding columns
+        cluster_mat = NULL
+        for (CELLTYPE in names(cluster_info)){
+            tmp_mat = obj$mat_list[[CELLTYPE]]
+            tmp_mat = tmp_mat[ ,cluster_info[[CELLTYPE]], drop = F]
+            colnames(tmp_mat) = paste0(CELLTYPE, "__", colnames(tmp_mat))
+            if(is.null(cluster_mat)){
+                cluster_mat = tmp_mat
+            } else {
+                cluster_mat = cbind(cluster_mat, tmp_mat)
+            }
+            rm(tmp_mat)
+        }
+        
+        # run PCApermtest for them
+        perm_res = PCApermtest(mat = cluster_mat, 
+                               k = k, 
+                               var_prop = var_prop,
+                               var_prop_total = var_prop_total,
+                               center = center, scale = scale, 
+                               num_iter = num_iter, 
+                               row_filtering_pval = row_filtering_pval)
+        # get the sig genes given the PCApermtest object
+        sig_genes = get_sig_genes(perm_obj = perm_res, 
+                                  k = k, 
+                                  var_prop = var_prop, 
+                                  var_prop_total = var_prop_total,
+                                  perm_pval_thres = perm_pval_thres, 
+                                  ori_pval_thres = ori_pval_thres, 
+                                  cor_threshold = cor_threshold, 
+                                  collapse = collapse)
+        res_list[[names(obj$program_assignment)[i]]] = list(sig_genes = sig_genes, 
+                                                            perm_res = perm_res)
+    }
+    return(res_list)
 }
 
 

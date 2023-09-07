@@ -4,8 +4,10 @@ NULL
 
 #' Internal Function to Fit a Gamma-Poisson GLM
 #'
-#' @inheritParams glm_gp
-#' @inheritParams overdispersion_mle
+#' @inheritParams glmGamPoi::glm_gp
+#' @inheritParams glmGamPoi::overdispersion_mle
+#' @import glmGamPoi
+#' 
 #' @param Y any matrix-like object (e.g. `matrix()`, `DelayedArray()`, `HDF5Matrix()`) with
 #'   one column per sample and row per gene.
 #'

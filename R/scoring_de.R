@@ -10,6 +10,9 @@ NULL
 #' of perturbation strength in each cell, as well as their cell type background. 
 #'
 #' @inheritParams Seurat::FindMarkers
+#' @import Seurat
+#' @import glmGamPoi
+#' 
 #' @param object An object of class Seurat.
 #' @param assay Assay to use for mixscape classification.
 #' @param slot Assay data slot to use.
