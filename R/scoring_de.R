@@ -20,6 +20,8 @@ NULL
 #' @param slot Assay data slot to use.
 #' @param labels metadata column with target gene labels.
 #' @param nt.class.name Classification name of non-targeting gRNA cells.
+#' @param PRTB_list provide a vector of PRTBs that the DE tests are restricted 
+#' to. Default is NULL (DE tests will be performed for all available PRTBs).
 #' @param new.class.name Name of mixscape classification to be stored in
 #' metadata.
 #' @param min.de.genes Required number of genes that are differentially
@@ -42,6 +44,7 @@ NULL
 
 scoringDE = function (object, assay = "RNA", slot = "data", labels = "gene", 
                       nt.class.name = "NT", verbose = FALSE, 
+                      PRTB_list = NULL,
                       split.by = "cell_type",
                       total_ct_labels = "nCount_RNA",  
                       logfc.threshold = 0.2, 
@@ -77,6 +80,15 @@ scoringDE = function (object, assay = "RNA", slot = "data", labels = "gene",
     all_PRTB_list = all_PRTB_list[all_PRTB_list != nt.class.name]
     wt_PRTB_list = wt_PRTB_list[wt_PRTB_list %in% all_PRTB_list]
     DefaultAssay(object) = "RNA"
+    
+    if(!is.null(PRTB_list)){
+        wt_PRTB_list = intersect(wt_PRTB_list, PRTB_list)
+        all_PRTB_list = intersect(all_PRTB_list, PRTB_list)
+        # check if there is any PRTB left for DE test
+        if(length(all_PRTB_list) == 0){
+            stop("There is no perturbation left for DE tests. Please check the PRTB_list you provided.")
+        }
+    }
     
     # 
     # count_data = GetAssayData(object = object[['RNA']], slot = "counts")   # get the raw count data (required by neg binom)
@@ -447,6 +459,8 @@ scoringDE = function (object, assay = "RNA", slot = "data", labels = "gene",
 #' Each matrix represents one cell type (if multiple cell types were included), and contains the 
 #' DE test Z-scores for each valid gene being tested (rows) and each perturbation target (columns).  
 #' 
+#' @export
+#' 
 #' @param de_res the DE results produced by scoringDE(), which is a list of data frames.
 #' @param p_threshold the DE P-value threshold to define statistically significant DE genes. 
 #' @param fc_threshold the log-fold-change threhsold to define statistically significant DE genes. 
@@ -528,6 +542,105 @@ get_DE_mat = function(de_res = NULL,
     
     return(DEG_mat)
 }
+
+
+
+#' QC for the list of DE Z-score matrices
+#' 
+#' A function to perform QC/filtering for the DE Z-score matrices that produced by get_DE_mat(). 
+#' 
+#' @export
+#' @param DEG_mat the list of DE Z-score matrices that produced by get_DE_mat()
+#' @param zscore_cap the cap value for the Z-scores. Any absolute(Z-score) larger than this value will be 
+#' set to this value to avoid extreme values affecting the downstream analyses. Default is 37 
+#' which is the machine precision limit for a Z-score to produce a non-zero P-value (= ~1e-300). 
+#' @param mask_target a boolen value to indicate if the Z-score of the perturbation target (labelled 
+#' by the column names) should be masked as 0. Default is FALSE so no masking will happen.
+#' @param min_sig_DEG the minimal number of significant DE genes that each column must contain. Any 
+#' column with sig DE genes less than this value will be removed from the matrix. Default is 0 so no 
+#' column will be removed. 
+#' @param p_threshold the P-value threshold to define the 'significant' DE genes. Default is 0.05/30000, which
+#' is approximately the Bonferroni correction threshold for genome-wide DE tests (assuming 30,000 genes in total).
+#' @param center a boolen value to indicate whether we should center each column to 0. Default is FALSE.
+#' @param scale a boolen value to indicate whether we should scale each column to have variance = 1. Default is FALSE.
+#' 
+#' @return The function will return a list of QCed DE Z-score matrices. This list can directly be the input for 
+#' DEmultiCCA(). 
+#' 
+
+prune_DE_mat = function(DEG_mat = NULL, 
+                        zscore_cap = 37, 
+                        mask_target = FALSE, 
+                        p_threshold = 0.05/30000,
+                        min_sig_DEG = 0, 
+                        center = FALSE, 
+                        scale = FALSE,
+                        ...){
+    # get the cell type names and the column names (list of PRTBs) from the DEG_mat 
+    celltype_list = names(DEG_mat)
+    PRTB_list = colnames(DEG_mat[[1]])[-1]
+    
+    # get the names for all the DE genes
+    gene_ID = DEG_mat[[1]]$gene_ID
+    
+    # If TRUE, we will mask the PRTB target in each PRTB to 0:
+    if(mask_target == TRUE){
+        for(CELLTYPE in celltype_list){
+            tmp = DEG_mat[[CELLTYPE]]
+            for(PRTB in PRTB_list){
+                if(PRTB %in% tmp$gene_ID){
+                    tmp[tmp$gene_ID %in% PRTB, PRTB] = 0
+                } 
+            }
+            DEG_mat[[CELLTYPE]] = tmp
+        }
+    }
+
+    # reset all the NAs to 0s
+    for(i in 1:length(DEG_mat)){
+        DEG_mat[[i]][is.na(DEG_mat[[i]])] = 0
+    }
+    
+    # we also cap the z-score if a zscore_cap is provided. 
+    for(i in 1:length(DEG_mat)){
+        DEG_mat[[i]][, -1][DEG_mat[[i]][, -1] >= zscore_cap] = zscore_cap
+        DEG_mat[[i]][, -1][DEG_mat[[i]][, -1] <= -zscore_cap] = -zscore_cap
+    }
+    
+    # remove any column with all 0s (this will cause an error when doing SVD)
+    DEG_mat2 = list()
+    for(CELLTYPE in celltype_list){
+        tmp = DEG_mat[[CELLTYPE]][, -1, drop = F]
+        rm_idx = vector()
+        for(i in 1:ncol(tmp)){
+            if(sum(abs(tmp[, i]) > sqrt(qchisq(p_threshold, df=1, lower.tail = F))) < min_sig_DEG){
+                rm_idx = c(rm_idx, i)
+            }
+        }
+        if(length(rm_idx) != 0){
+            tmp = tmp[, -rm_idx, drop = F]
+        }
+        row.names(tmp) = DEG_mat[[CELLTYPE]][, 1]
+        # colnames(tmp) = tmp[, "gene_ID"]
+        if(ncol(tmp) > 1){
+            DEG_mat2[[CELLTYPE]] = tmp
+        } else {
+            DEG_mat2[[CELLTYPE]] = NULL
+        }
+    }
+    
+    # centering and scaling 
+    if(center == TRUE){
+        for(i in 1:length(DEG_mat2)){
+            DEG_mat2[[i]] = scale(DEG_mat2[[i]], center = center, scale = scale)
+        }
+    }
+    # 
+    return(DEG_mat2)
+}
+
+
+
 
 
 

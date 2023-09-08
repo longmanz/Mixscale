@@ -153,7 +153,7 @@ rbo_enrich_test <- function(input_list,
                             go_term_db, 
                             p, 
                             n_iter = 500, 
-                            k=floor(max(length(list1), length(list2))/2), 
+                            k=300, 
                             side=c("top", "bottom"), 
                             mid = NULL, 
                             uneven.lengths = TRUE, 
@@ -173,6 +173,16 @@ rbo_enrich_test <- function(input_list,
                              names(tmp) = x
                              return(tmp)
                          })
+    
+    # create a rank vector from input_list
+    ori_input_list = input_list
+    if(side == "bottom"){
+        input_list = 1:length(ori_input_list)
+        names(input_list) = ori_input_list
+    } else if (side == "top") {
+        input_list = length(ori_input_list):1
+        names(input_list) = ori_input_list
+    }
     
     # 1. calculate the true RBO for the input_list and all the GO terms
     rbo_real = sapply(X = go_term_db2, 
