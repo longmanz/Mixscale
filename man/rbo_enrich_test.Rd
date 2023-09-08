@@ -9,7 +9,7 @@ rbo_enrich_test(
   go_term_db,
   p,
   n_iter = 500,
-  k = floor(max(length(list1), length(list2))/2),
+  k = 300,
   side = c("top", "bottom"),
   mid = NULL,
   uneven.lengths = TRUE,

@@ -6,11 +6,12 @@
 \usage{
 scoringDE(
   object,
-  assay = "PRTB",
+  assay = "RNA",
   slot = "data",
   labels = "gene",
   nt.class.name = "NT",
   verbose = FALSE,
+  PRTB_list = NULL,
   split.by = "cell_type",
   total_ct_labels = "nCount_RNA",
   logfc.threshold = 0.2,
@@ -32,6 +33,9 @@ scoringDE(
 \item{nt.class.name}{Classification name of non-targeting gRNA cells.}
 
 \item{verbose}{Print a progress bar once expression testing begins}
+
+\item{PRTB_list}{provide a vector of PRTBs that the DE tests are restricted 
+to. Default is NULL (DE tests will be performed for all available PRTBs).}
 
 \item{split.by}{metadata column with experimental condition/cell type
 classification information. This is meant to be used to account for cases a
@@ -67,7 +71,7 @@ expressed for method to separate perturbed and non-perturbed cells.}
 list of DE results
 }
 \description{
-Function to perform differential expression (DE) tests based on the perturbation scores from the 
+A function to perform differential expression (DE) tests based on the perturbation scores from the 
 PRTBScoring() function. It is a multivariate negative binomial based model that incorporates both the heterogeneity 
 of perturbation strength in each cell, as well as their cell type background.
 }
