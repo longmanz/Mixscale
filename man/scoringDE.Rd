@@ -17,7 +17,7 @@ scoringDE(
   pseudocount.use = 0.1,
   base = 2,
   min.pct = 0.1,
-  min.cells = 5
+  min.cells = 10
 )
 }
 \arguments{

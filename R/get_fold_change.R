@@ -125,6 +125,7 @@ get_idx = function(gene_exp = NULL, idx_P = NULL, idx_NT = NULL,
 #' minimal percentage of cells expression the genes, and the base of the log.  
 #'
 #' @inheritParams Seurat::FoldChange
+#' @importFrom Matrix rowSums
 #' @return Returns a single value of the log-fold-change of the input gene.
 #' @export
 #' @concept perturbation_scoring
@@ -141,17 +142,17 @@ FoldChange_new <- function(
     
     # Calculate percent expressed
     thresh.min <- 0
-    
-    min.cell.1 = rowSums(x = object[features, cells.1, drop = FALSE] > thresh.min) 
-    min.cell.2 = rowSums(x = object[features, cells.2, drop = FALSE] > thresh.min) 
+
+    min.cell.1 = Matrix::rowSums(x = object[features, cells.1, drop = FALSE] > thresh.min) 
+    min.cell.2 = Matrix::rowSums(x = object[features, cells.2, drop = FALSE] > thresh.min) 
     
     pct.1 <- round(
-        x = rowSums(x = object[features, cells.1, drop = FALSE] > thresh.min) /
+        x = Matrix::rowSums(x = object[features, cells.1, drop = FALSE] > thresh.min) /
             length(x = cells.1),
         digits = 3
     )
     pct.2 <- round(
-        x = rowSums(x = object[features, cells.2, drop = FALSE] > thresh.min) /
+        x = Matrix::rowSums(x = object[features, cells.2, drop = FALSE] > thresh.min) /
             length(x = cells.2),
         digits = 3
     )

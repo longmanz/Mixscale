@@ -5,13 +5,15 @@ NULL
 
 #' Scoring-based DE test
 #'
-#' Function to perform differential expression (DE) tests based on the perturbation scores from the 
+#' A function to perform differential expression (DE) tests based on the perturbation scores from the 
 #' PRTBScoring() function. It is a multivariate negative binomial based model that incorporates both the heterogeneity 
 #' of perturbation strength in each cell, as well as their cell type background. 
 #'
 #' @inheritParams Seurat::FindMarkers
 #' @import Seurat
+#' @import SeuratObject
 #' @import glmGamPoi
+#' @importFrom Matrix rowMeans
 #' 
 #' @param object An object of class Seurat.
 #' @param assay Assay to use for mixscape classification.
@@ -38,7 +40,7 @@ NULL
 #' @export
 #' @concept perturbation_scoring
 
-scoringDE = function (object, assay = "PRTB", slot = "data", labels = "gene", 
+scoringDE = function (object, assay = "RNA", slot = "data", labels = "gene", 
                       nt.class.name = "NT", verbose = FALSE, 
                       split.by = "cell_type",
                       total_ct_labels = "nCount_RNA",  
@@ -52,7 +54,7 @@ scoringDE = function (object, assay = "PRTB", slot = "data", labels = "gene",
     print("Running scoring DE test!\n")
     
     # check if the required package is installed
-    glmGamPoi.installed <- PackageCheck("glmGamPoi", error = FALSE)
+    glmGamPoi.installed <- SeuratObject::PackageCheck("glmGamPoi", error = FALSE)
     if (!glmGamPoi.installed[1]) {
         stop("Please install the glmGamPoi package to use scoringDE", 
              "\nThis can be accomplished with the following command: ", 
@@ -205,10 +207,10 @@ scoringDE = function (object, assay = "PRTB", slot = "data", labels = "gene",
             idx_P_celltype = match(mat_all$cell_label[mat_all$cell_type == celltype & 
                                                           mat_all$gene != "NT"], colnames(object))
             # get the fold-change and min.pct and min.cell
-            fc = FoldChange_new(object = GetAssayData(object = object, slot = "data"),
+            fc = FoldChange_new(obj = GetAssayData(object = object, slot = "data"),
                                 cells.1 = colnames(object)[idx_NT_celltype],
                                 cells.2 = colnames(object)[idx_P_celltype],
-                                mean.fxn = function(x) log(x = rowMeans(x = expm1(x = x)) + pseudocount.use, base = base),
+                                mean.fxn = function(x) log(x = Matrix::rowMeans(x = expm1(x = x)) + pseudocount.use, base = base),
                                 fc.name = "avg_log2FC",
                                 features = rownames(x = object) ) 
             # overall filtering (including fold-change)
@@ -234,12 +236,12 @@ scoringDE = function (object, assay = "PRTB", slot = "data", labels = "gene",
                 names(idx_list) = celltype
                 # 
                 fc_mat = data.frame(celltype = fc_list[[celltype]]$avg_log2FC)
-                names(fc_mat) = celltype
+                names(fc_mat) = paste0("fc_", celltype)
             } else {
                 idx_list[[celltype]] = fc_list[[celltype]]$status
                 idx_list2[[celltype]] = fc_list[[celltype]]$status2
                 
-                fc_mat[[celltype]] = fc_list[[celltype]]$avg_log2FC
+                fc_mat[[paste0("fc_", celltype)]] = fc_list[[celltype]]$avg_log2FC
             }
         }
         # count all the columns and get a single index vector
@@ -436,4 +438,102 @@ scoringDE = function (object, assay = "PRTB", slot = "data", labels = "gene",
     
     return(all_res)
 }
+
+
+
+#' Rearrange the DE results into a list of Z-score matrices
+#'
+#' A function to re-arrange the DE results produced by scoringDE() into a list of Z-score matrices. 
+#' Each matrix represents one cell type (if multiple cell types were included), and contains the 
+#' DE test Z-scores for each valid gene being tested (rows) and each perturbation target (columns).  
+#' 
+#' @param de_res the DE results produced by scoringDE(), which is a list of data frames.
+#' @param p_threshold the DE P-value threshold to define statistically significant DE genes. 
+#' @param fc_threshold the log-fold-change threhsold to define statistically significant DE genes. 
+#' 
+
+get_DE_mat = function(de_res = NULL, 
+                      p_threshold = 0.05/30000,
+                      fc_threshold = 0.2){
+    # first get the names of all the perturbations
+    PRTB_list = names(de_res)
+    
+    # and get the names of all the cell types
+    celltype_list = grep("fc_", colnames(de_res[[1]]), value = T)
+    celltype_list = sort(gsub("fc_", "", celltype_list))
+    
+    # now we will extract the genes that meet the p_threshold and fc_threshold criteria
+    gene_list = c()
+    slct_PRTB_list = c()  #  we also filter out PRTB with no responses;
+    
+    # loop through all the PRTBs
+    for(PRTB in PRTB_list){
+        # load the results file
+        DE_res = de_res[[PRTB]]
+        
+        isDE = vector()
+        for(i in 1:nrow(DE_res)){
+            # count if there is any sig DE for each gene being tested
+            ct_DE = sum( (DE_res[i, paste0("p_cell_type", celltype_list, ":weight")] <= p_threshold) & 
+                             (abs(DE_res[i, paste0("fc_", celltype_list)]) >= fc_threshold), na.rm = T )
+            isDE = c(isDE, ct_DE)
+        }
+        DE_res$ct_DE = isDE
+        DE_res = DE_res[order(DE_res$ct_DE, decreasing = T), ]
+        
+        print(paste(PRTB, ":", sum(DE_res$ct_DE != 0) ) )
+        
+        if(sum(DE_res$ct_DE != 0) > 0){
+            gene_list = c(gene_list, DE_res[DE_res$ct_DE != 0, "gene_ID"])
+            slct_PRTB_list = c(slct_PRTB_list, PRTB)
+        }
+    }
+    
+    # get the unique gene names
+    gene_list2 = unique(gene_list)
+    slct_PRTB_list = unique(slct_PRTB_list)
+    
+    # B. second loop to extract z score based on the DEG list we made in the first loop
+    #     here we extract the DEG results for each cell type and make it a DEG matrix individually;
+    
+    DEG_mat = list() # to save all the DEG matrices 
+    logfc_mat = list() # to save the log-fc information
+    
+    for(CELLTYPE in celltype_list){
+        # save the results for each cell type
+        merged_dat1= data.frame(gene_ID = gene_list2)
+        merged_dat2 = data.frame(gene_ID = gene_list2)
+        
+        # 
+        for(PRTB in slct_PRTB_list){
+            DE_res = de_res[[PRTB]]
+            
+            # 
+            DE_res$z = sign(DE_res[, paste0("beta_cell_type", CELLTYPE, ":weight")]) * sqrt(qchisq(DE_res[, paste0("p_cell_type", CELLTYPE, ":weight")], df = 1, lower.tail = F))
+            logfc_res = DE_res[, c("gene_ID", paste0("fc_", CELLTYPE))]
+            DE_res = DE_res[, c("gene_ID", "z")]
+            names(DE_res) = c("gene_ID", PRTB)
+            merged_dat1 = merge(merged_dat1, DE_res, by = "gene_ID", all.x = T)
+            
+            # 
+            names(logfc_res) = c("gene_ID", PRTB)
+            merged_dat2 = merge(merged_dat2, logfc_res, by = "gene_ID", all.x = T)
+            
+        }
+        # append the matrix to the list 
+        DEG_mat[[CELLTYPE]] = merged_dat1
+        logfc_mat[[CELLTYPE]] = merged_dat2
+        
+    }
+    
+    return(DEG_mat)
+}
+
+
+
+
+
+
+
+
 

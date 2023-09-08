@@ -1,11 +1,11 @@
 #'
 NULL
 
-#' PCA, MinMax clustering, and MultiCCA analyses, as well as the PCA-based permutation test.
-#' The PCA-based permutation test. This function will load in a DE test Z-score
-#' matrix, and perform PCA to it to get the 1st to k-th PCs. Then it will permuate
-#' the matrix and then the same PCA analysis will be performed. By default, this process
-#' will be repeated for 500 times, so that we will have a decent number of null values 
+#' Run PCA-based permutation test for a matrix
+#' 
+#' This function will load in a DE test Z-score matrix, and perform PCA to it to get the 1st to k-th PCs. 
+#' Then it will permuate the matrix and then the same PCA analysis will be performed. By default, this process
+#' will be repeated for 200 times (default), so that we will have a decent number of null values 
 #' in the top k PCs. The proportion of extreme values greater or smaller than the actual
 #' value will be used as the P-values. 
 #' 
@@ -119,6 +119,8 @@ PCApermtest = function(mat = NULL, k = 1,
 }
 
 
+#' Extract significant genes from PCApermtest
+#' 
 #' The function will load the pval matrix calculated from PCApermtest() and 
 #' return the significant rows (usually genes) given the threshold that users
 #' provide. 
@@ -258,6 +260,8 @@ get_sig_genes = function(perm_obj = NULL,
 }
 
 
+#' Run Hierarchical clustering for a matrix
+#' 
 #' A wrapper for different hierarchical clustering methods to be applied to the within-cell-type
 #' cross-conditions Z-score matrix (input). Highly similar conditions (columns) will be grouped together 
 #' given the DE Z-scores of rows (genes). 
@@ -338,6 +342,8 @@ DEhclust = function(mat = NULL,
 }
 
 
+#' Run PCApermtest and get significant genes from DEhclust
+#' 
 #' This function will use the output from the DEhclust() and get the necessary elements for PCApermtest():
 #' For each cluster of columns being identified, this function will create a truncated sub-matrix given 
 #' the original Z-score matrix. The sub-matrix will only contains the selected columns, and they will be input
@@ -400,6 +406,8 @@ get_sig_genes_DEhclust = function(obj = NULL,
 }
 
 
+#' Run MultiCCA for a list of matrices
+#' 
 #' A function to perform MultiCCA analysis (main function imported from package "PMA", 
 #' see PMID 19377034 for details of the algorithm) that takes in a list of multiple 
 #' Z-score matrices to find the canonical variates (CVs) that maximize the cross-matrices 
@@ -411,6 +419,8 @@ get_sig_genes_DEhclust = function(obj = NULL,
 #' runs is reached (set by users) or the CVs across the matrices have very low correlation 
 #' coefficients. 
 #' 
+#' 
+#' @importFrom PMA MultiCCA
 #' @export
 #' @param mat_list the list of >= 2 DE Z-score matrices for the multiCCA analysis. Each matrix
 #' should have the same named rows, but can have different number of columns (samples). 
@@ -528,9 +538,15 @@ DEmultiCCA = function(mat_list = NULL,
             } else {
                 stop("Currently we do not support MultiCCA with multiple different penalty values. sorry.")
             }
-
+            
+            # check if X2 is empty
+            if(length(X2) == 0){
+                print(paste("Stopping since the mat_list is now empty."))
+                return(list(program_assignment = res, mat_list = mat_list))
+            }
+            
             # run MultiCCA() from PMA package. 
-            out <- MultiCCA(X2, type=rep("standard",length(X2)),
+            out <- PMA::MultiCCA(X2, type=rep("standard",length(X2)),
                             penalty= penalties,niter = 30,
                             ncomponents=1, trace = F, standardize = standardize)
             
@@ -805,14 +821,21 @@ DEmultiCCA = function(mat_list = NULL,
             }
         }
         
+        # check if X2 is empty
+        if(length(X2) == 0){
+            print(paste("Stopping since the mat_list is now empty."))
+            return(list(program_assignment = res, mat_list = mat_list))
+        }
+        
     }
-    
     return(list(program_assignment = res, mat_list = mat_list))
 }
 
 
 
 
+#' Run PCApermtest and get significant genes from DEmultiCCA
+#' 
 #' This function will use the output from the DEmultiCCA() and get the neccessary elements for PCApermtest and 
 #' get the gene signatures for each perturbation program that DEmultiCCA() identifies. It works in a similar way 
 #' as get_sig_genes_DEhclust() . 

@@ -11,11 +11,14 @@ NULL
 
 
 
+#' Rank biased overlap 
+#' 
 #' Functions for a new gene-set enrichment test based on the 
 #' RBO (rank biased overlap) calculation with extropolation (Webber et al., 2010).
 #' The core functions of rbo() calculation was modified from the "gespeR" package (original author: Fabian Schmich). 
 #' We modified it to accomodate our package and data type. We also developed a permutation scheme for 
 #' RBO to allow for p-value calculations. 
+#' 
 #' @author Fabian Schmich ("gespeR" package)
 #' @export
 #' 
@@ -122,8 +125,9 @@ rbo <- function(list1, list2, p, k=floor(max(length(list1), length(list2))/2), s
 }
 
 
+#' Rank biased overlap (RBO) based enrichment test
 #'
-#' Function to perform enrichment test based on rbo(). 
+#' To perform enrichment test based on rank biased overlap and permutation. 
 #'
 #' @export
 #' 
@@ -244,7 +248,10 @@ gs_seq = function(d, p){
 
 
 
-#' This script is for the conventional Fisher's exact test enrichment method (adopted from DAVID GO analysis).
+#' Standard Fisher's exact test for enrichment analysis
+#' 
+#' This function will perform the strandard Fisher's exact test between the input gene 
+#' list and a series of gene-ontology gene sets (adopted from DAVID GO analysis).
 #' 
 #' @export
 #' 

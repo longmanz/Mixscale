@@ -3,11 +3,13 @@
 NULL
 
 
-#' This script contains multiple functions for visualization of different output in 
-#' this package. The major part is for the visualization for the decomposition.R. The 
-#' other part also contains the visualization for the enrichment_test.R.
+# This script contains multiple functions for visualization of different output in 
+# this package. The major part is for the visualization for the decomposition.R. The 
+# other part also contains the visualization for the enrichment_test.R.
 
 
+#' Draw DE Z-score heatmap for gene signatures 
+#' 
 #' This function will generate a standard heatmap based on the DE Z-score heatmap.
 #' Only the selected significant gene signatures will be plotted in the rows. 
 #' 
@@ -92,6 +94,10 @@ DE_heatmap = function(obj = NULL,
             
         }
         
+        if(length(slct_idx) <= 1 | any(is.na(slct_idx))){
+            return(0)
+        }
+        
         # the plot 
         pdf(file = paste0(output_path, "/", prefix, "_", type, ".pdf"), 
             height = height, width = width)
@@ -146,6 +152,10 @@ DE_heatmap = function(obj = NULL,
                 # color range 
                 col3 = brewer.pal(9, "Reds")
                 symbreaks = F
+            }
+            
+            if(length(slct_idx) <= 1 | any(is.na(slct_idx))){
+                return()
             }
             
             # the plot 
@@ -204,6 +214,10 @@ DE_heatmap = function(obj = NULL,
                 # color range 
                 col3 = brewer.pal(9, "Reds")
                 symbreaks = F
+            }
+            
+            if(length(slct_idx) <= 1 | any(is.na(slct_idx))){
+                return()
             }
             
             # the plot 

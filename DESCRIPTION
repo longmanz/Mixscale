@@ -4,6 +4,10 @@ Title: Scoring-based DE test for sc-Perturb-seq experiment
 Version: 0.0.1.0
 RoxygenNote: 7.2.3
 Collate: 
+    'decomposition.R'
+    'enrichment_test.R'
     'get_fold_change.R'
+    'glm_gp_disp_only.R'
     'perturbation_scoring.R'
     'scoring_de.R'
+    'visualization.R'
