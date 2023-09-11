@@ -18,24 +18,89 @@ NULL
 #' @import Seurat
 #' 
 #' @param object a seurat object returned by PRTBScoring()
-#'
+#' @param labels the column name in the object's meta.data that contains the target
+#' gene labels
+#' @param nt.class.name the classification name of non-targeting gRNA cells
+#' @param split.by metadata column with experimental condition/cell type classification 
+#' information. This is meant to be used to account for cases a perturbation is 
+#' condition/cell type -specific.
+#' @param PRTB the perturbation target genes to extract for plotting. Multiple values are 
+#' allowed.
+#' @param facet_wrap whether to divide the plot into multiple facets based on either the 
+#' perturbation targets ("gene") or conditions/cell types ("split.by"). Default is NULL, meaning
+#' no facet.
+#' @param facet_scale whether to use a fixed scale for y-axis across all facets or allow 
+#' y axis to vary. 
+#' 
+#' 
 #' @return a ggplot2 object that contains the ridge plot.
 
 PRTBscore_RidgePlot = function(object = NULL, 
                                labels = "gene", 
                                nt.class.name = "NT", 
                                split.by = NULL, 
-                               PRTB = NULL, 
+                               PRTB = NULL,
+                               facet_wrap = c(NULL, "gene", "split.by"),
+                               facet_scale = c("fixed", "free_y"),
                                ...){
     # first get the full object of the PRTB scores
-    prtb_score <- Tool(object = object, slot = "PRTBScoring")
+    prtb_score <- Tool(object = object, slot = "RunMixscape_LOOv3")
     # check if the scores exist
     if(is.null(prtb_score)){
         stop(paste0("It seems the scores are not calculated for this object. Please check!"))
     }
     
-    # 
+    # if the split.by is set, need to extract it 
+    if (is.null(x = split.by)) {
+        split.by <- splits <- "con1"
+    } else {
+        splits <- as.character(x = unique(x = object[[split.by]][, 
+                                                                 1]))
+    }
     
+    # to extract useful info for each PRTB 
+    all_scores = data.frame()
+    # 
+    for (CELLTYPE in splits){
+        for (prtb in PRTB){
+            if(! prtb %in% names(prtb_score)){
+                print(paste0("The provided perturbation: ", prtb, " does not have perturbation scores. Skipping..."))
+                next()
+            }
+            
+            scores = prtb_score[[prtb]][[CELLTYPE]][, c(1:2)]  # get the column 1 (score) and 2 (label)
+            scores$cell_ID = rownames(scores)
+            scores$celltype = CELLTYPE
+            scores$PRTB_group = prtb
+            
+            all_scores = rbind(all_scores, scores)
+        }
+    }
+    
+    # adding some more columns 
+    all_scores$status = "NT"
+    all_scores$status[all_scores$gene != nt.class.name] = "perturbed"
+    
+    all_scores$celltype = factor(x = all_scores$celltype, levels = splits)
+    all_scores$status = factor(all_scores$status, levels = c("NT", "perturbed"))
+    
+    # generate the ggplot2 object
+    if(facet_wrap == "split.by"){
+        p3 = ggplot(all_scores, aes(x = pvec, y = celltype, fill = status)) +
+            geom_density_ridges(scale = 1.4, rel_min_height = 0.01) +
+            theme_ridges() + xlab("cell line") + ylab("PRTB score") +
+            facet_wrap(~ PRTB_group, scales = facet_scale)
+    } else if(facet_wrap == "gene"){
+        p3 = ggplot(all_scores, aes(x = pvec, y = PRTB_group, fill = status)) +
+            geom_density_ridges(scale = 1.4, rel_min_height = 0.01) +
+            theme_ridges() + xlab("cell line") + ylab("PRTB score") +
+            facet_wrap(~ celltype, scales = facet_scale)
+    } else {
+        p3 = ggplot(all_scores, aes(x = pvec, y = PRTB_group, fill = status)) +
+            geom_density_ridges(scale = 1.4, rel_min_height = 0.01) +
+            theme_ridges() + xlab("cell line") + ylab("PRTB score") 
+    }
+    return(p3)
 }
 
 
@@ -172,7 +237,7 @@ PRTBscore_ScatterPlot = function(object = NULL,
     } else if (facet_wrap == "gene"){
         return(p + facet_wrap(~ PRTB, scales = facet_scale))
     } else if (facet_wrap == "split.by"){
-        return(p + facet_wrap(~ CELLTYPE, ncol=3, scales = facet_scale))
+        return(p + facet_wrap(~ CELLTYPE, scales = facet_scale))
     }
     
     
