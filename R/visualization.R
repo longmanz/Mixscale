@@ -16,6 +16,7 @@ NULL
 #' @export
 #' @import ggplot2
 #' @import Seurat
+#' @import ggridges
 #' 
 #' @param object a seurat object returned by PRTBScoring()
 #' @param labels the column name in the object's meta.data that contains the target
@@ -44,7 +45,7 @@ PRTBscore_RidgePlot = function(object = NULL,
                                facet_scale = c("fixed", "free_y"),
                                ...){
     # first get the full object of the PRTB scores
-    prtb_score <- Tool(object = object, slot = "RunMixscape_LOOv3")
+    prtb_score <- Tool(object = object, slot = "PRTBScoring")
     # check if the scores exist
     if(is.null(prtb_score)){
         stop(paste0("It seems the scores are not calculated for this object. Please check!"))
@@ -79,7 +80,7 @@ PRTBscore_RidgePlot = function(object = NULL,
     
     # adding some more columns 
     all_scores$status = "NT"
-    all_scores$status[all_scores$gene != nt.class.name] = "perturbed"
+    all_scores$status[all_scores[[labels]] != nt.class.name] = "perturbed"
     
     all_scores$celltype = factor(x = all_scores$celltype, levels = splits)
     all_scores$status = factor(all_scores$status, levels = c("NT", "perturbed"))
@@ -88,17 +89,17 @@ PRTBscore_RidgePlot = function(object = NULL,
     if(facet_wrap == "split.by"){
         p3 = ggplot(all_scores, aes(x = pvec, y = celltype, fill = status)) +
             geom_density_ridges(scale = 1.4, rel_min_height = 0.01) +
-            theme_ridges() + xlab("cell line") + ylab("PRTB score") +
+            theme_ridges() + xlab("PRTB score") + ylab("condition") +
             facet_wrap(~ PRTB_group, scales = facet_scale)
     } else if(facet_wrap == "gene"){
         p3 = ggplot(all_scores, aes(x = pvec, y = PRTB_group, fill = status)) +
             geom_density_ridges(scale = 1.4, rel_min_height = 0.01) +
-            theme_ridges() + xlab("cell line") + ylab("PRTB score") +
+            theme_ridges() + xlab("PRTB score") + ylab("gene") +
             facet_wrap(~ celltype, scales = facet_scale)
     } else {
         p3 = ggplot(all_scores, aes(x = pvec, y = PRTB_group, fill = status)) +
             geom_density_ridges(scale = 1.4, rel_min_height = 0.01) +
-            theme_ridges() + xlab("cell line") + ylab("PRTB score") 
+            theme_ridges() + xlab("PRTB score") + ylab("gene") 
     }
     return(p3)
 }
@@ -192,10 +193,10 @@ PRTBscore_ScatterPlot = function(object = NULL,
             combine_dat = merge(scores, target_expression, by = "cell_ID", all.x = T)
             
             # we will keep a record of the average log(expression-level) of the target in the NT cells 
-            mean_log_exp_NT = mean(combine_dat[combine_dat$gene == nt.class.name, "target_expression"])
+            mean_log_exp_NT = mean(combine_dat[combine_dat[[labels]] == nt.class.name, "target_expression"])
             
             # only focus on PRTB cells and remove NT cell
-            combine_dat = combine_dat[combine_dat$gene != nt.class.name, ]
+            combine_dat = combine_dat[combine_dat[[labels]] != nt.class.name, ]
             
             # calculate the cutoff for each bin of the scores
             bin_cutoff = quantile(combine_dat$pvec, probs = seq(0, 1, 1/nbin))
@@ -242,6 +243,74 @@ PRTBscore_ScatterPlot = function(object = NULL,
     
     
 }
+
+
+
+#' Single-cell heatmap for selected DE genes stratified by target expression
+#' 
+#' This function will generate single-cell expression heatmap for selected DE genes 
+#' in cells of the same perturbation target (gRNA). This function is basically a 
+#' wrapper function of the Seurat::DoHeatmap(), but with easier usage to select the 
+#' cells based on given gRNA identity. Cells will be ordered in each stratification based 
+#' on their perturbation scores. 
+#' 
+#' 
+#' 
+
+PRTBscore_DoHeatmap = function(object = NULL, 
+                               assay = "RNA", 
+                               slot = "data",
+                               labels = "gene", 
+                               nt.class.name = "NT", 
+                               PRTB = NULL, 
+                               slct_condition = "con1",
+                               slct_features = NULL,
+                               ...){
+    # get the full object of the PRTB scores
+    prtb_score <- Tool(object = object, slot = "PRTBScoring")
+    # check if the scores exist
+    if(is.null(prtb_score)){
+        stop(paste0("It seems the scores are not calculated for this object. Please check!"))
+    }
+    
+    # get the scores for the selected PRTB and condition
+    scores = prtb_score[[PRTB]][[slct_condition]][, c(1:2)]  # get the column 1 (score) and 2 (label)
+    scores$cell_ID = rownames(scores)
+    
+    # get a subsetted seurat object for the DoHeatmap() function
+    sub_obj = subset(object, cells = scores$cell_ID)
+
+    # add the perturbation score to the meta-data:
+    sub_obj = AddMetaData(sub_obj, metadata = scores)
+    
+    # 
+    sub_obj$ident_plot2 = as.character(sub_obj[[labels]][, 1])
+    
+    #  get the target gene expression level
+    target_expression <- GetAssayData(object = sub_obj, assay = assay, slot = slot)[PRTB, scores$cell_ID]
+    target_expression = target_expression[match(colnames(sub_obj), names(target_expression))]
+
+    idx_0 = which(target_expression == 0) 
+    idx_not0 = which(target_expression != 0) 
+    
+    sub_obj$ident_plot2[target_expression == 0 & sub_obj[[labels]][, 1] != nt.class.name] = "expr = 0"
+    sub_obj$ident_plot2[target_expression != 0 & sub_obj[[labels]][, 1] != nt.class.name] = "expr > 0"
+    
+    sub_obj$ident_plot2 = factor(x = as.character(sub_obj$ident_plot2), levels = c("NT", "expr > 0", "expr = 0"))
+    
+    weight_to_reorder <- sub_obj$pvec
+    ordered.cells <- names(x = weight_to_reorder)[order(weight_to_reorder, decreasing = F)]
+    
+    # scale the expression data
+    sub_obj <- ScaleData(object = sub_obj, features = unique(c(PRTB, slct_features)), assay = assay)
+    
+    ### plot all celltype together
+    p3 = DoHeatmap(object = sub_obj, features = unique(c(PRTB, slct_features)), label = TRUE, cells = ordered.cells, assay = 'RNA', 
+                   group.by = "ident_plot2") + ggtitle(paste0("Ordered by perturbation score"))
+    
+    return(p3)
+}
+
 
 
 
