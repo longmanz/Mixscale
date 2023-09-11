@@ -8,6 +8,179 @@ NULL
 # other part also contains the visualization for the enrichment_test.R.
 
 
+#' Plot to show the distribution of perturbation scores 
+#' 
+#' This function will generate a density (ridge) plot for the perturbation scores across
+#' different cell types or different perturbation targets. 
+#' 
+#' @export
+#' @import ggplot2
+#' @import Seurat
+#' 
+#' @param object a seurat object returned by PRTBScoring()
+#'
+#' @return a ggplot2 object that contains the ridge plot.
+
+PRTBscore_RidgePlot = function(object = NULL, 
+                               labels = "gene", 
+                               nt.class.name = "NT", 
+                               split.by = NULL, 
+                               PRTB = NULL, 
+                               ...){
+    # first get the full object of the PRTB scores
+    prtb_score <- Tool(object = object, slot = "PRTBScoring")
+    # check if the scores exist
+    if(is.null(prtb_score)){
+        stop(paste0("It seems the scores are not calculated for this object. Please check!"))
+    }
+    
+    # 
+    
+}
+
+
+
+
+
+#' Plot to compare the expression level of the perturbation target and the 
+#' perturbation scores
+#' 
+#' This function will generate a connected scatterplot to compare the mean
+#' expression level of the perturbation target gene within different perturbation 
+#' percentile bins. After running the PRTBScoring() function, user can specify the 
+#' gene name of the perturbation target and the number of bins to divide the scores 
+#' into, and this function will sutomatically generate a connected scatterplot. 
+#' Multiple perturbation targets and cell types are allowed. 
+#' 
+#' @export
+#' @import ggplot2
+#' @import Seurat
+#' 
+#' @param object a seurat object returned by PRTBScoring()
+#' @param assay the assay name to extract the expression level data from for plotting
+#' @param slot the slot name to extract the expression level data from for plotting
+#' @param labels the column name in the object's meta.data that contains the target
+#' gene labels
+#' @param nt.class.name the classification name of non-targeting gRNA cells
+#' @param split.by metadata column with experimental condition/cell type classification 
+#' information. This is meant to be used to account for cases a perturbation is 
+#' condition/cell type -specific.
+#' @param PRTB the perturbation target genes to extract for plotting. Multiple values are 
+#' allowed.
+#' @param nbin the number of bins to divide the perturbation scores into. 
+#' @param facet_wrap whether to divide the plot into multiple facets based on either the 
+#' perturbation targets ("gene") or conditions/cell types ("split.by"). Default is NULL, meaning
+#' no facet.
+#' @param facet_scale whether to use a fixed scale for y-axis across all facets or allow 
+#' y axis to vary. 
+#' 
+#' @return a ggplot2 object that contains the connected scatterplot. 
+#' 
+#' 
+
+PRTBscore_ScatterPlot = function(object = NULL, 
+                                 assay = "RNA", 
+                                 slot = "data", 
+                                 labels = "gene", 
+                                 nt.class.name = "NT", 
+                                 split.by = NULL, 
+                                 PRTB = NULL, 
+                                 nbin = 10,
+                                 facet_wrap = c(NULL, "gene", "split.by"),
+                                 facet_scale = c("fixed", "free_y"),
+                                 ...){
+    # if the split.by is set, need to extract it 
+    if (is.null(x = split.by)) {
+        split.by <- splits <- "con1"
+    } else {
+        splits <- as.character(x = unique(x = object[[split.by]][, 
+                                                                 1]))
+    }
+    
+    # to extract useful info for each PRTB 
+    final_res = data.frame()
+    # get the full object of the PRTB scores
+    prtb_score <- Tool(object = object, slot = "PRTBScoring")
+    # check if the scores exist
+    if(is.null(prtb_score)){
+        stop(paste0("It seems the scores are not calculated for this object. Please check!"))
+    }
+    
+    # 
+    for (CELLTYPE in splits){
+        for (prtb in PRTB){
+            if(! prtb %in% names(prtb_score)){
+                print(paste0("The provided perturbation: ", prtb, " does not have perturbation scores. Skipping..."))
+                next()
+            }
+            
+            scores = prtb_score[[prtb]][[CELLTYPE]][, c(1:2)]  # get the column 1 (score) and 2 (label)
+            scores$cell_ID = rownames(scores)
+            
+            #  get the target gene expression level
+            target_expression <- GetAssayData(object = object, assay = assay, slot = slot)[prtb, scores$cell_ID]
+            
+            target_expression = as.data.frame(target_expression)
+            target_expression$cell_ID = rownames(target_expression)
+            
+            # merge the target expression with prtb score
+            combine_dat = merge(scores, target_expression, by = "cell_ID", all.x = T)
+            
+            # we will keep a record of the average log(expression-level) of the target in the NT cells 
+            mean_log_exp_NT = mean(combine_dat[combine_dat$gene == nt.class.name, "target_expression"])
+            
+            # only focus on PRTB cells and remove NT cell
+            combine_dat = combine_dat[combine_dat$gene != nt.class.name, ]
+            
+            # calculate the cutoff for each bin of the scores
+            bin_cutoff = quantile(combine_dat$pvec, probs = seq(0, 1, 1/nbin))
+            
+            # we will store the expression level of the target gene in each pvec bin
+            exp_each_bin = vector()
+            
+            for(i in 1:nbin){
+                cutoff1 = bin_cutoff[i]
+                cutoff2 = bin_cutoff[i + 1]
+                # 
+                idx = which(combine_dat$pvec >= cutoff1 & combine_dat$pvec <= cutoff2)
+                mean_log_exp_bin = mean(combine_dat$target_expression[idx])
+                # 
+                exp_each_bin = c(exp_each_bin, mean_log_exp_bin)
+            }
+            
+            # convert it into a dataframe and we will iterate this step for all PRTB and cell types
+            exp_each_bin = as.data.frame(exp_each_bin)
+            exp_each_bin$bin_order = 1:nbin
+            exp_each_bin$PRTB = prtb
+            exp_each_bin$CELLTYPE = CELLTYPE
+            
+            final_res = rbind(final_res, exp_each_bin)
+        }
+    }
+    
+    # get the ggplot2 object
+    p = ggplot(data = final_res, aes(x=bin_order, y=exp_each_bin, shape=CELLTYPE, color = PRTB)) +
+        geom_line( ) +
+        geom_point( ) +
+        theme_minimal()  +
+        xlab("bins for perturbation scores") +
+        ylab("expression levels of target")
+    
+    # is facet_wrap is set, add it to the ggplot object
+    if(is.null(facet_wrap)){
+        return(p)
+    } else if (facet_wrap == "gene"){
+        return(p + facet_wrap(~ PRTB, scales = facet_scale))
+    } else if (facet_wrap == "split.by"){
+        return(p + facet_wrap(~ CELLTYPE, ncol=3, scales = facet_scale))
+    }
+    
+    
+}
+
+
+
+
 #' Draw DE Z-score heatmap for gene signatures 
 #' 
 #' This function will generate a standard heatmap based on the DE Z-score heatmap.
