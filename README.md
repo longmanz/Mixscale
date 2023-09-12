@@ -3,7 +3,7 @@
 ## installation 
 Please download the whole package using command:
 ```
-git clone git@github.com:longmanz/Perturbation_Scoring.git 
+git clone https://github.com/longmanz/Perturbation_Scoring.git
 ```
 \
 Then in R, please use the following command to load the package. 
