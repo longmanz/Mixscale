@@ -1,9 +1,14 @@
 # Perturbation_Scoring
 
 ## installation 
-Please download the whole package using command:
+You can easily install the package by the following command:
 ```
-git clone https://github.com/longmanz/Perturbation_Scoring.git
+install_github("longmanz/PRTBScoring")
+```
+
+Or, if you prefer to download it first and then install it locally, please download using the following command:
+```
+git clone https://github.com/longmanz/PRTBScoring.git
 ```
 \
 Then in R, please use the following command to load the package. 
@@ -11,4 +16,3 @@ Then in R, please use the following command to load the package.
 devtools::load_all("/path_to_the_downloaded_directory/")
 ```
 \
-Direct installation from github in R (e.g., using devtools::install_github() ) is not recommended at the moment, since this package is not completed.
