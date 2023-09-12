@@ -1,7 +1,7 @@
 ---
-title: "Demo_PRTB_scoring"
-author: "Longda"
-date: "2023-09-11"
+title: "Calculate perturbation scores for Perturb-seq data"
+author: "Longda Jiang"
+date: "2023-09-12"
 output: html_document
 ---
 
@@ -26,7 +26,7 @@ This html file describes a robust computational framework, "perturbation scoring
 library(devtools)
 library(Seurat)
 library(ggridges)
-load_all("/Users/uqljian5/Documents/github_repo/Perturbation_Scoring")
+library(PRTBScoring)
 ```
 
 ## 0. load the demo data 
