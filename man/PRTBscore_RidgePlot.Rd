@@ -12,6 +12,7 @@ PRTBscore_RidgePlot(
   PRTB = NULL,
   facet_wrap = c(NULL, "gene", "split.by"),
   facet_scale = c("fixed", "free_y"),
+  facet_nrow = 1,
   ...
 )
 }
@@ -36,6 +37,8 @@ no facet.}
 
 \item{facet_scale}{whether to use a fixed scale for y-axis across all facets or allow 
 y axis to vary.}
+
+\item{facet_nrow}{the number of rows to plot the different panels when facet_wrap is set.}
 }
 \value{
 a ggplot2 object that contains the ridge plot.

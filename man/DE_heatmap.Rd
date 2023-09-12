@@ -47,6 +47,10 @@ value will be capped to this value.}
 
 \item{width}{the width (in inch) for the figure}
 }
+\value{
+this function returns nothing. It directly output the generated figures to the directory that 
+a user specifies.
+}
 \description{
 This function will generate a standard heatmap based on the DE Z-score heatmap.
 Only the selected significant gene signatures will be plotted in the rows.

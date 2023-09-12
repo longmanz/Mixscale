@@ -43,7 +43,8 @@ the true empirical test).}
 }
 \value{
 a data.frame consists of rbo measurement between the inptu gene list and all the GO terms, 
-as well as the P-values based on permutaion
+as well as the P-values based on permutation. Please note that the P-values indicate whether the rank of the input gene
+list and the GO-term gene set are consistent or not. It does NOT indicate if RBO is significantly different from 0.
 }
 \description{
 To perform enrichment test based on rank biased overlap and permutation.

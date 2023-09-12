@@ -32,6 +32,7 @@ NULL
 #' no facet.
 #' @param facet_scale whether to use a fixed scale for y-axis across all facets or allow 
 #' y axis to vary. 
+#' @param facet_nrow the number of rows to plot the different panels when facet_wrap is set. 
 #' 
 #' 
 #' @return a ggplot2 object that contains the ridge plot.
@@ -43,6 +44,7 @@ PRTBscore_RidgePlot = function(object = NULL,
                                PRTB = NULL,
                                facet_wrap = c(NULL, "gene", "split.by"),
                                facet_scale = c("fixed", "free_y"),
+                               facet_nrow = 1, 
                                ...){
     # first get the full object of the PRTB scores
     prtb_score <- Tool(object = object, slot = "PRTBScoring")
@@ -90,12 +92,12 @@ PRTBscore_RidgePlot = function(object = NULL,
         p3 = ggplot(all_scores, aes(x = pvec, y = celltype, fill = status)) +
             geom_density_ridges(scale = 1.4, rel_min_height = 0.01) +
             theme_ridges() + xlab("PRTB score") + ylab("condition") +
-            facet_wrap(~ PRTB_group, scales = facet_scale)
+            facet_wrap(~ PRTB_group, nrow = facet_nrow, scales = facet_scale)
     } else if(facet_wrap == "gene"){
         p3 = ggplot(all_scores, aes(x = pvec, y = PRTB_group, fill = status)) +
             geom_density_ridges(scale = 1.4, rel_min_height = 0.01) +
             theme_ridges() + xlab("PRTB score") + ylab("gene") +
-            facet_wrap(~ celltype, scales = facet_scale)
+            facet_wrap(~ celltype, nrow = facet_nrow, scales = facet_scale)
     } else {
         p3 = ggplot(all_scores, aes(x = pvec, y = PRTB_group, fill = status)) +
             geom_density_ridges(scale = 1.4, rel_min_height = 0.01) +
@@ -254,6 +256,24 @@ PRTBscore_ScatterPlot = function(object = NULL,
 #' cells based on given gRNA identity. Cells will be ordered in each stratification based 
 #' on their perturbation scores. 
 #' 
+#' @export
+#' 
+#' @import Seurat
+#' 
+#' @param object a seurat object returned by PRTBScoring()
+#' @param assay the assay name to extract the expression level data from for plotting
+#' @param slot the slot name to extract the expression level data from for plotting
+#' @param labels the column name in the object's meta.data that contains the target
+#' gene labels
+#' @param nt.class.name the classification name of non-targeting gRNA cells
+#' @param PRTB the gene name of the perturbation target to be plotted
+#' @param slct_condition the name of the selected condition (e.g., cell type) to be 
+#' plotted. If split.by was set to NULL during PRTBScoring(), then user should leave it 
+#' as the default value (i.e., "con1").
+#' @param slct_features a vector of the names of the selected features (usually some DE 
+#' genes) to be plotted in the heatmap. 
+#' 
+#' @return a ggplot2 object of the single-cell heatmap.
 #' 
 #' 
 
@@ -305,7 +325,7 @@ PRTBscore_DoHeatmap = function(object = NULL,
     sub_obj <- ScaleData(object = sub_obj, features = unique(c(PRTB, slct_features)), assay = assay)
     
     ### plot all celltype together
-    p3 = DoHeatmap(object = sub_obj, features = unique(c(PRTB, slct_features)), label = TRUE, cells = ordered.cells, assay = 'RNA', 
+    p3 = DoHeatmap(object = sub_obj, features = unique(c(PRTB, slct_features)), label = TRUE, cells = ordered.cells, assay = assay, 
                    group.by = "ident_plot2") + ggtitle(paste0("Ordered by perturbation score"))
     
     return(p3)
@@ -341,6 +361,9 @@ PRTBscore_DoHeatmap = function(object = NULL,
 #' @param prefix the prefix for how the file of the heatmap should be named
 #' @param height the height (in inch) for the figure
 #' @param width the width (in inch) for the figure
+#' 
+#' @return this function returns nothing. It directly output the generated figures to the directory that 
+#' a user specifies. 
 #' 
 
 DE_heatmap = function(obj = NULL, 
