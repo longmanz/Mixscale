@@ -1,4 +1,4 @@
-Package: Perturbation_Scoring
+Package: PRTBScoring
 Type: Package
 Title: Scoring-based DE test for sc-Perturb-seq experiment
 Version: 0.0.1.0
