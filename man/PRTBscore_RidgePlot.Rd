@@ -10,6 +10,7 @@ PRTBscore_RidgePlot(
   nt.class.name = "NT",
   split.by = NULL,
   PRTB = NULL,
+  slct_split.by = NULL,
   facet_wrap = c(NULL, "gene", "split.by"),
   facet_scale = c("fixed", "free_y"),
   facet_nrow = 1,
@@ -30,6 +31,10 @@ condition/cell type -specific.}
 
 \item{PRTB}{the perturbation target genes to extract for plotting. Multiple values are 
 allowed.}
+
+\item{slct_split.by}{if only a subset of the conditions/cell-types in the split.by column need 
+to be plotted, users can specify them as a character vector here. Default is NULL, meaning all the 
+conditions/cell-types need to be plotted.}
 
 \item{facet_wrap}{whether to divide the plot into multiple facets based on either the 
 perturbation targets ("gene") or conditions/cell types ("split.by"). Default is NULL, meaning

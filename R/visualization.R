@@ -27,6 +27,9 @@ NULL
 #' condition/cell type -specific.
 #' @param PRTB the perturbation target genes to extract for plotting. Multiple values are 
 #' allowed.
+#' @param slct_split.by if only a subset of the conditions/cell-types in the split.by column need 
+#' to be plotted, users can specify them as a character vector here. Default is NULL, meaning all the 
+#' conditions/cell-types need to be plotted.
 #' @param facet_wrap whether to divide the plot into multiple facets based on either the 
 #' perturbation targets ("gene") or conditions/cell types ("split.by"). Default is NULL, meaning
 #' no facet.
@@ -42,6 +45,7 @@ PRTBscore_RidgePlot = function(object = NULL,
                                nt.class.name = "NT", 
                                split.by = NULL, 
                                PRTB = NULL,
+                               slct_split.by = NULL,
                                facet_wrap = c(NULL, "gene", "split.by"),
                                facet_scale = c("fixed", "free_y"),
                                facet_nrow = 1, 
@@ -59,6 +63,14 @@ PRTBscore_RidgePlot = function(object = NULL,
     } else {
         splits <- as.character(x = unique(x = object[[split.by]][, 
                                                                  1]))
+    }
+    
+    # if slct_split.by is set, we restrict it only to those ones
+    if(!is.null(x = slct_split.by)){
+        splits = intersect(slct_split.by, splits)
+        if(length(splits) == 0){
+            stop("The selected slct_split.by has no intersection with the split.by column. Please check.")
+        }
     }
     
     # to extract useful info for each PRTB 
@@ -90,18 +102,18 @@ PRTBscore_RidgePlot = function(object = NULL,
     # generate the ggplot2 object
     if(facet_wrap == "split.by"){
         p3 = ggplot(all_scores, aes(x = pvec, y = celltype, fill = status)) +
-            geom_density_ridges(scale = 1.4, rel_min_height = 0.01) +
-            theme_ridges() + xlab("PRTB score") + ylab("condition") +
+            ggridges::geom_density_ridges(scale = 1.4, rel_min_height = 0.01) +
+            ggridges::theme_ridges() + xlab("PRTB score") + ylab("condition") +
             facet_wrap(~ PRTB_group, nrow = facet_nrow, scales = facet_scale)
     } else if(facet_wrap == "gene"){
         p3 = ggplot(all_scores, aes(x = pvec, y = PRTB_group, fill = status)) +
-            geom_density_ridges(scale = 1.4, rel_min_height = 0.01) +
-            theme_ridges() + xlab("PRTB score") + ylab("gene") +
+            ggridges::geom_density_ridges(scale = 1.4, rel_min_height = 0.01) +
+            ggridges::theme_ridges() + xlab("PRTB score") + ylab("gene") +
             facet_wrap(~ celltype, nrow = facet_nrow, scales = facet_scale)
     } else {
         p3 = ggplot(all_scores, aes(x = pvec, y = PRTB_group, fill = status)) +
-            geom_density_ridges(scale = 1.4, rel_min_height = 0.01) +
-            theme_ridges() + xlab("PRTB score") + ylab("gene") 
+            ggridges::geom_density_ridges(scale = 1.4, rel_min_height = 0.01) +
+            ggridges::theme_ridges() + xlab("PRTB score") + ylab("gene") 
     }
     return(p3)
 }
