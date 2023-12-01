@@ -1,7 +1,7 @@
-Package: PRTBScoring
+Package: Mixscale 
 Type: Package
-Title: Scoring-based DE test for sc-Perturb-seq experiment
-Version: 0.2.0
+Title: Quantify the perturbation heterogeneity in Perturb-seq 
+Version: 0.3.0
 RoxygenNote: 7.2.3
 Collate: 
     'decomposition.R'

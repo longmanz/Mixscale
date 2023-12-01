@@ -49,13 +49,13 @@ Note that if split.by is set and more than 1 split.by group exists, this
 logfc.threashold will be applied to each group. Default is 0.25.}
 
 \item{pseudocount.use}{Pseudocount to add to averaged expression values when
-calculating logFC. 0.1 by default.}
+calculating logFC. 1 by default.}
 
 \item{base}{The base with respect to which logarithms are computed.}
 
 \item{min.pct}{only test genes that are detected in a minimum fraction of
 min.pct cells in either of the two populations. Meant to speed up the function
-by not testing genes that are very infrequently expressed. Default is 0.1}
+by not testing genes that are very infrequently expressed. Default is 0.01}
 
 \item{min.cells}{Minimum number of cells in target gene class. If fewer than
 this many cells are assigned to a target gene class during classification,
