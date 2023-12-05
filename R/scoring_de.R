@@ -464,11 +464,15 @@ scoringDE = function (object, assay = "RNA", slot = "data", labels = "gene",
 #' @param de_res the DE results produced by scoringDE(), which is a list of data frames.
 #' @param p_threshold the DE P-value threshold to define statistically significant DE genes. 
 #' @param fc_threshold the log-fold-change threhsold to define statistically significant DE genes. 
+#' @param num_top_DEG for each perturbation, only the top num_top_DEG DEG within each condition/cell line
+#' will be selected as the rows (features). This helps avoid the feature space is dominated by one or a few perturbations 
+#' that have a huge number of DEGs. The default is 50. Set it to NULL to avoid filtering.
 #' 
 
 get_DE_mat = function(de_res = NULL, 
                       p_threshold = 0.05/30000,
-                      fc_threshold = 0.2){
+                      fc_threshold = 0.2, 
+                      num_top_DEG = 50){
     # first get the names of all the perturbations
     PRTB_list = names(de_res)
     
@@ -485,15 +489,37 @@ get_DE_mat = function(de_res = NULL,
         # load the results file
         DE_res = de_res[[PRTB]]
         
-        isDE = vector()
-        for(i in 1:nrow(DE_res)){
-            # count if there is any sig DE for each gene being tested
-            ct_DE = sum( (DE_res[i, paste0("p_cell_type", celltype_list, ":weight")] <= p_threshold) & 
-                             (abs(DE_res[i, paste0("fc_", celltype_list)]) >= fc_threshold), na.rm = T )
-            isDE = c(isDE, ct_DE)
+        # select 
+        total_idx_DE = list()
+        # for each celltype, get the idx for all the DEGs
+        for(CELLTYPE in celltype_list){
+            idx_DE = which( (DE_res[, paste0("p_cell_type", CELLTYPE, ":weight")] <= p_threshold) & 
+                                (abs(DE_res[, paste0("fc_", CELLTYPE)]) >= fc_threshold) )
+            
+            if(!is.null(num_top_DEG)){
+                if(length(idx_DE) > num_top_DEG){
+                    idx_DE = idx_DE[order(DE_res[idx_DE, paste0("p_cell_type", CELLTYPE, ":weight")]) <= num_top_DEG]
+                }
+            }
+            total_idx_DE[[CELLTYPE]] = idx_DE
         }
-        DE_res$ct_DE = isDE
+        
+        # 
+        total_idx_DE = Reduce(union, total_idx_DE)
+        
+        DE_res$ct_DE = 0
+        DE_res$ct_DE[total_idx_DE] = 1
         DE_res = DE_res[order(DE_res$ct_DE, decreasing = T), ]
+        
+        # isDE = vector()
+        # for(i in 1:nrow(DE_res)){
+        #     # count if there is any sig DE for each gene being tested
+        #     ct_DE = sum( (DE_res[i, paste0("p_cell_type", celltype_list, ":weight")] <= p_threshold) & 
+        #                      (abs(DE_res[i, paste0("fc_", celltype_list)]) >= fc_threshold), na.rm = T )
+        #     isDE = c(isDE, ct_DE)
+        # }
+        # DE_res$ct_DE = isDE
+        # DE_res = DE_res[order(DE_res$ct_DE, decreasing = T), ]
         
         print(paste(PRTB, ":", sum(DE_res$ct_DE != 0) ) )
         

@@ -587,6 +587,7 @@ DEmultiCCA = function(mat_list = NULL,
             
             # calculate cor_mat and its row_mean (without diagonal elements)
             cor_mat = cor(Reduce(cbind, variates_list), use = "complete.obs")
+            print(cor_mat)
             cor_mat = abs(cor_mat)
             mean_cor = vector()
             for(i in 1:ncol(cor_mat)){
@@ -687,7 +688,7 @@ DEmultiCCA = function(mat_list = NULL,
             
         }
         
-        # modified on 2023 Jan 23, here we will check the 
+        # modified on 2023 Jan 23
         rm_row_idx = vector()
         pvec_mat_list_qc = list()
         
