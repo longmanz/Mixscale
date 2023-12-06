@@ -443,7 +443,8 @@ get_sig_genes_DEhclust = function(obj = NULL,
 #' to remove such matrices. If (the CV of) any matrix has a mean correlation coefficient <= 0.2, it will 
 #' be removed and the MultiCCA will be repeated for this round (k-th). Note that this matrix will be appended 
 #' back to the list for the next round (k+1-th) of MultiCCA, and the same filtering will be repeated. 
-#' Default is 0.2. Set it to 0 to avoid such filtering. 
+#' Default is 0.2. Set it to 0 to avoid such filtering. Vector is also accepted and will be sequentially used 
+#' for each iteration of MultiCCA.
 #' 
 #' 
 #' @seealso [MultiCCA()]
@@ -459,7 +460,7 @@ DEmultiCCA = function(mat_list = NULL,
                       flag_loose = F,
                       pval_thres = 0.05,
                       cor_coef_thres = 0.6,
-                      preset_max_PC = T, 
+                      cor_coef_mean_thres = 0.3,
                       ...) {
     # first, check if PMA is installed. 
     PMA.installed <- PackageCheck("PMA", error = FALSE)
@@ -498,9 +499,27 @@ DEmultiCCA = function(mat_list = NULL,
     single_X = list()  # keep record of the matrix that has only 1 column
     res = list()  # the list to store the output from each round of MultiCCA
     
+    # 
+    cor_coef_thres_list = cor_coef_thres
+    cor_coef_mean_thres_list = cor_coef_mean_thres
+    
     # run through max_k rounds of MultiCCA
     for(k in 1:max_k){
-
+        # 
+        if(length(cor_coef_thres_list) <= k){
+            cor_coef_thres = tail(cor_coef_thres_list, 1)
+        } else {
+            cor_coef_thres = cor_coef_thres_list[k]
+        }
+        
+        # 
+        if(length(cor_coef_mean_thres_list) <= k){
+            cor_coef_mean_thres = tail(cor_coef_mean_thres_list, 1)
+        } else {
+            cor_coef_mean_thres = cor_coef_mean_thres_list[k]
+        }
+        
+        ###################
         # this is a flag 
         flag_rm_any_celltype = T
         
@@ -587,7 +606,7 @@ DEmultiCCA = function(mat_list = NULL,
             
             # calculate cor_mat and its row_mean (without diagonal elements)
             cor_mat = cor(Reduce(cbind, variates_list), use = "complete.obs")
-            print(cor_mat)
+            # print(cor_mat)
             cor_mat = abs(cor_mat)
             mean_cor = vector()
             for(i in 1:ncol(cor_mat)){
@@ -671,6 +690,7 @@ DEmultiCCA = function(mat_list = NULL,
                 colnames(pvec_mat) = colnames(cor_coef_mat) = colnames(X2[[CELLTYPE]])
                 
             }
+            # print(cor_coef_mat)
             
             # We will adjust the correlation P-values for multiple testing using BH
             pvec_mat_BH = p.adjust(pvec_mat, method = "BH")
@@ -692,19 +712,30 @@ DEmultiCCA = function(mat_list = NULL,
         rm_row_idx = vector()
         pvec_mat_list_qc = list()
         
+        # print(pvec_mat_list)
+        # print(cor_coef_mat_list)
+        
         for(idx_mat in 1:length(pvec_mat_list)){
             CELLTYPE = names(pvec_mat_list)[idx_mat]
             tmp = pvec_mat_list[[idx_mat]]
             tmp2 = cor_coef_mat_list[[idx_mat]][idx_mat, ]
+            tmp3 = colMeans( abs(cor_coef_mat_list[[idx_mat]][-idx_mat, , drop = F]) )
+            # round it (2 digits)
+            tmp2 = round(x = tmp2, digits = 2)
+            tmp3 = round(x = tmp3, digits = 2)
+            # print(tmp3)
             
             # 1. p-value thresholding 
             idx_pval = abs(tmp) <= pval_thres
             # 2. cor_coef thresholding
             idx_cor_coef = abs(tmp2) >= cor_coef_thres
             idx_cor_coef = matrix(data = idx_cor_coef, ncol = length(idx_cor_coef), nrow = nrow(tmp), byrow = T)
+            # 3. cor_coef_mean_thres 
+            idx_cor_coef_mean = abs(tmp3) >= cor_coef_mean_thres
+            idx_cor_coef_mean = matrix(data = idx_cor_coef_mean, ncol = length(idx_cor_coef_mean), nrow = nrow(tmp), byrow = T)
             # generate a neigboring graph
-            tmp[idx_pval & idx_cor_coef] = 1
-            tmp[!(idx_pval & idx_cor_coef)] = 0
+            tmp[idx_pval & idx_cor_coef & idx_cor_coef_mean] = 1
+            tmp[!(idx_pval & idx_cor_coef & idx_cor_coef_mean)] = 0
             
             # 3. cor_coef thresholding
             # idx_cor_coef2 = abs(tmp2) >= 0.8
@@ -719,6 +750,7 @@ DEmultiCCA = function(mat_list = NULL,
             colnames(tmp) = paste0(CELLTYPE, "__", colnames(tmp))
             pvec_mat_list_qc[[CELLTYPE]] = tmp
         }
+        # print(pvec_mat_list_qc)
         
         if(length(rm_row_idx) != 0){
             # remove the corresponding matrix 
@@ -739,8 +771,8 @@ DEmultiCCA = function(mat_list = NULL,
         
         # merge them into one matrix
         test = Reduce(cbind, pvec_mat_list_qc)
-        
-        if(ncol(test) <= 1 | nrow(test) <= 1){
+
+        if(length(test) == 0 | ncol(test) <= 1 | nrow(test) <= 1){
             print("No more correlated columns are detected by MultiCCA (flag = 0). Terminating...")
             max_k = k-1
             return(list(program_assignment = res, mat_list = mat_list))
@@ -751,8 +783,8 @@ DEmultiCCA = function(mat_list = NULL,
         order_2 = duplicated(t(test)) | duplicated(t(test), fromLast = T)
         test = test[, order(order_1, order_2, decreasing = T)]
         
-        test = test[, colSums(test) > 0]
-        if(ncol(test) <= 1){
+        test = test[, colSums(test) > 0, drop = F]
+        if(length(test) == 0 | ncol(test) <= 1){
             print("No more correlated columns are detected by MultiCCA (flag = 1). Terminating...")
             max_k = k-1
             return(list(program_assignment = res, mat_list = mat_list))
