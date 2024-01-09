@@ -42,7 +42,7 @@ NULL
 #' @export
 #' @concept perturbation_scoring
 
-scoringDE = function (object, assay = "RNA", slot = "data", labels = "gene", 
+Run_wtDE = function (object, assay = "RNA", slot = "data", labels = "gene", 
                       nt.class.name = "NT", verbose = FALSE, 
                       PRTB_list = NULL,
                       split.by = "cell_type",
@@ -521,7 +521,7 @@ get_DE_mat = function(de_res = NULL,
         # DE_res$ct_DE = isDE
         # DE_res = DE_res[order(DE_res$ct_DE, decreasing = T), ]
         
-        print(paste(PRTB, ":", sum(DE_res$ct_DE != 0) ) )
+        # print(paste(PRTB, ":", sum(DE_res$ct_DE != 0) ) )
         
         if(sum(DE_res$ct_DE != 0) > 0){
             gene_list = c(gene_list, DE_res[DE_res$ct_DE != 0, "gene_ID"])

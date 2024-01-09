@@ -56,7 +56,7 @@ NULL
 #' meta.data. 
 #' @concept perturbation_scoring
 
-PRTBScoring = function (object, assay = "PRTB", slot = "scale.data", labels = "gene", 
+RunMixscale = function (object, assay = "PRTB", slot = "scale.data", labels = "gene", 
                         nt.class.name = "NT", new.class.name = "mixscape_class", 
                         min.de.genes = 5, min.cells = 5, de.assay = "RNA", logfc.threshold = 0.25, 
                         verbose = FALSE, split.by = NULL, fine.mode = FALSE, 

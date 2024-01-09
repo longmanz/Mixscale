@@ -1,0 +1,41 @@
+---
+title: "Using Mixscale for Perturb-seq data"
+author: "Longda Jiang"
+date: "2024-01-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+In this tutorial, we will describe an R package "Mixscale" for analyzing Perturb-seq data. Mixscale contains functions designed to tackle the following tasks:\
+1. calculate 'Mixscale scores' for cells that receives the same perturbation to quantify the heterogeneity in perturbation strength \
+2. perform a scoring-based weighted differential expression (DE) tests to identify DE genes for each perturbation \
+3. perform different levels of decomposition analysis to identify correlated perturbations and group them into a program \
+4. perform a PCA-based permutation test to extract shared genes for the perturbation programs (program gene signature) \
+5. identify shared and unique signature between two relevant programs \
+6. perform gene set enrichment tests using the program signature for new datasets \
+7. perform module score analyses using the program signature to quantify the program activity in new datasets \
+\
+The tutorial is divided into two sections. The first section will describe task 1 to 5 using a public Perturb-seq dataset from the Weissman Lab ([Jost et al 2020](https://www.nature.com/articles/s41587-019-0387-5)), which can be downloaded from [GSE132080](https://0-www-ncbi-nlm-nih-gov.brum.beds.ac.uk/geo/query/acc.cgi?acc=GSE132080). The second section will describe task 6 and 7 using the pathway gene lists generated from our study (available at [Zenodo](not_inserted_yet)) and an interferon-beta stimulated human PBMCs dataset (ifnb) from [Kang et al 2017](https://www.nature.com/articles/nbt.4042). This ifnb dataset is available via the SeuratData package (see section 2 below).
+
+
+## load the packages
+```{r load_package, message=FALSE, warning=FALSE}
+library(devtools)
+library(Seurat)
+library(ggridges)
+library(Mixscale)
+```
+
+
+
+
+
+
+
+
+
