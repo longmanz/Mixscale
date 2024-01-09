@@ -15,7 +15,7 @@ DEmultiCCA(
   flag_loose = F,
   pval_thres = 0.05,
   cor_coef_thres = 0.6,
-  preset_max_PC = T,
+  cor_coef_mean_thres = 0.3,
   ...
 )
 }
@@ -40,7 +40,8 @@ low(er) correlation with other matrices, it will impact the MultiCCA process. Th
 to remove such matrices. If (the CV of) any matrix has a mean correlation coefficient <= 0.2, it will 
 be removed and the MultiCCA will be repeated for this round (k-th). Note that this matrix will be appended 
 back to the list for the next round (k+1-th) of MultiCCA, and the same filtering will be repeated. 
-Default is 0.2. Set it to 0 to avoid such filtering.}
+Default is 0.2. Set it to 0 to avoid such filtering. Vector is also accepted and will be sequentially used 
+for each iteration of MultiCCA.}
 
 \item{cor_num}{for each column of a matrix, the number of CVs that it needs to be significantly correlated 
 with to be selected as a member of the program. Default is "all", meaning it needs to be significantly 

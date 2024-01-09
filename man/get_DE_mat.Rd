@@ -4,17 +4,26 @@
 \alias{get_DE_mat}
 \title{Rearrange the DE results into a list of Z-score matrices}
 \usage{
-get_DE_mat(de_res = NULL, p_threshold = 0.05/30000, fc_threshold = 0.2)
+get_DE_mat(
+  de_res = NULL,
+  p_threshold = 0.05/30000,
+  fc_threshold = 0.2,
+  num_top_DEG = 50
+)
 }
 \arguments{
-\item{de_res}{the DE results produced by scoringDE(), which is a list of data frames.}
+\item{de_res}{the DE results produced by Run_wtDE(), which is a list of data frames.}
 
 \item{p_threshold}{the DE P-value threshold to define statistically significant DE genes.}
 
 \item{fc_threshold}{the log-fold-change threhsold to define statistically significant DE genes.}
+
+\item{num_top_DEG}{for each perturbation, only the top num_top_DEG DEG within each condition/cell line
+will be selected as the rows (features). This helps avoid the feature space is dominated by one or a few perturbations 
+that have a huge number of DEGs. The default is 50. Set it to NULL to avoid filtering.}
 }
 \description{
-A function to re-arrange the DE results produced by scoringDE() into a list of Z-score matrices. 
+A function to re-arrange the DE results produced by Run_wtDE() into a list of Z-score matrices. 
 Each matrix represents one cell type (if multiple cell types were included), and contains the 
 DE test Z-scores for each valid gene being tested (rows) and each perturbation target (columns).
 }

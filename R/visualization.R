@@ -18,7 +18,7 @@ NULL
 #' @import Seurat
 #' @import ggridges
 #' 
-#' @param object a seurat object returned by PRTBScoring()
+#' @param object a seurat object returned by RunMixscale()
 #' @param labels the column name in the object's meta.data that contains the target
 #' gene labels
 #' @param nt.class.name the classification name of non-targeting gRNA cells
@@ -40,7 +40,7 @@ NULL
 #' 
 #' @return a ggplot2 object that contains the ridge plot.
 
-PRTBscore_RidgePlot = function(object = NULL, 
+Mixscale_RidgePlot = function(object = NULL, 
                                labels = "gene", 
                                nt.class.name = "NT", 
                                split.by = NULL, 
@@ -51,7 +51,7 @@ PRTBscore_RidgePlot = function(object = NULL,
                                facet_nrow = 1, 
                                ...){
     # first get the full object of the PRTB scores
-    prtb_score <- Tool(object = object, slot = "PRTBScoring")
+    prtb_score <- Tool(object = object, slot = "RunMixscale")
     # check if the scores exist
     if(is.null(prtb_score)){
         stop(paste0("It seems the scores are not calculated for this object. Please check!"))
@@ -127,7 +127,7 @@ PRTBscore_RidgePlot = function(object = NULL,
 #' 
 #' This function will generate a connected scatterplot to compare the mean
 #' expression level of the perturbation target gene within different perturbation 
-#' percentile bins. After running the PRTBScoring() function, user can specify the 
+#' percentile bins. After running the RunMixscale() function, user can specify the 
 #' gene name of the perturbation target and the number of bins to divide the scores 
 #' into, and this function will sutomatically generate a connected scatterplot. 
 #' Multiple perturbation targets and cell types are allowed. 
@@ -136,7 +136,7 @@ PRTBscore_RidgePlot = function(object = NULL,
 #' @import ggplot2
 #' @import Seurat
 #' 
-#' @param object a seurat object returned by PRTBScoring()
+#' @param object a seurat object returned by RunMixscale()
 #' @param assay the assay name to extract the expression level data from for plotting
 #' @param slot the slot name to extract the expression level data from for plotting
 #' @param labels the column name in the object's meta.data that contains the target
@@ -158,7 +158,7 @@ PRTBscore_RidgePlot = function(object = NULL,
 #' 
 #' 
 
-PRTBscore_ScatterPlot = function(object = NULL, 
+Mixscale_ScatterPlot = function(object = NULL, 
                                  assay = "RNA", 
                                  slot = "data", 
                                  labels = "gene", 
@@ -180,7 +180,7 @@ PRTBscore_ScatterPlot = function(object = NULL,
     # to extract useful info for each PRTB 
     final_res = data.frame()
     # get the full object of the PRTB scores
-    prtb_score <- Tool(object = object, slot = "PRTBScoring")
+    prtb_score <- Tool(object = object, slot = "RunMixscale")
     # check if the scores exist
     if(is.null(prtb_score)){
         stop(paste0("It seems the scores are not calculated for this object. Please check!"))
@@ -272,7 +272,7 @@ PRTBscore_ScatterPlot = function(object = NULL,
 #' 
 #' @import Seurat
 #' 
-#' @param object a seurat object returned by PRTBScoring()
+#' @param object a seurat object returned by RunMixscale()
 #' @param assay the assay name to extract the expression level data from for plotting
 #' @param slot the slot name to extract the expression level data from for plotting
 #' @param labels the column name in the object's meta.data that contains the target
@@ -280,7 +280,7 @@ PRTBscore_ScatterPlot = function(object = NULL,
 #' @param nt.class.name the classification name of non-targeting gRNA cells
 #' @param PRTB the gene name of the perturbation target to be plotted
 #' @param slct_condition the name of the selected condition (e.g., cell type) to be 
-#' plotted. If split.by was set to NULL during PRTBScoring(), then user should leave it 
+#' plotted. If split.by was set to NULL during RunMixscale(), then user should leave it 
 #' as the default value (i.e., "con1").
 #' @param slct_features a vector of the names of the selected features (usually some DE 
 #' genes) to be plotted in the heatmap. 
@@ -289,7 +289,7 @@ PRTBscore_ScatterPlot = function(object = NULL,
 #' 
 #' 
 
-PRTBscore_DoHeatmap = function(object = NULL, 
+Mixscale_DoHeatmap = function(object = NULL, 
                                assay = "RNA", 
                                slot = "data",
                                labels = "gene", 
@@ -299,7 +299,7 @@ PRTBscore_DoHeatmap = function(object = NULL,
                                slct_features = NULL,
                                ...){
     # get the full object of the PRTB scores
-    prtb_score <- Tool(object = object, slot = "PRTBScoring")
+    prtb_score <- Tool(object = object, slot = "RunMixscale")
     # check if the scores exist
     if(is.null(prtb_score)){
         stop(paste0("It seems the scores are not calculated for this object. Please check!"))
@@ -347,7 +347,7 @@ PRTBscore_DoHeatmap = function(object = NULL,
 
 #' Multi-way dotplot for multi-cell-line DE results
 #' 
-#' This function will generate a multi-way dotplot if the DE results produces by scoringDE() 
+#' This function will generate a multi-way dotplot if the DE results produces by Run_wtDE() 
 #' and get_DE_mat() contain multiple different cell-lines. The a-axis will be some selected perturbations and 
 #' the y-axis will be some selected DE genes that users want to explore. Within each column, 
 #' multiple dots will be displayed, with size representing the DE test DE Z-score (significance)

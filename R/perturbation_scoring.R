@@ -2,7 +2,7 @@
 NULL
 
 
-#' Perturbation Scoring
+#' Mixscale scoring for perturbations
 #'
 #' Function to calculate perturbation scores for perturbed and non-perturbed gRNA expressing cells.
 #' The perturbation score reflects the perturbation strength of each cells (inherited from the RunMixscape()
@@ -65,7 +65,7 @@ RunMixscale = function (object, assay = "PRTB", slot = "scale.data", labels = "g
                         min_prop_ntgd = 0.1, pval.cutoff = 0.05, 
                         seed = 10282021) 
 {
-    print("Running PRTBScoring to calculate the perturbation scores \n")
+    print("Running Mixscale scoring to calculate the perturbation scores \n")
     
     assay <- assay %||% DefaultAssay(object = object)
     if(!assay %in% names(object@assays)){

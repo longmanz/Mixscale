@@ -3,10 +3,10 @@
 #'
 NULL
 
-#' Scoring-based DE test
+#' Scoring-based weighted DE test
 #'
 #' A function to perform differential expression (DE) tests based on the perturbation scores from the 
-#' PRTBScoring() function. It is a multivariate negative binomial based model that incorporates both the heterogeneity 
+#' RunMixscale() function. It is a multivariate negative binomial based model that incorporates both the heterogeneity 
 #' of perturbation strength in each cell, as well as their cell type background. 
 #'
 #' @inheritParams Seurat::FindMarkers
@@ -59,7 +59,7 @@ Run_wtDE = function (object, assay = "RNA", slot = "data", labels = "gene",
     # check if the required package is installed
     glmGamPoi.installed <- SeuratObject::PackageCheck("glmGamPoi", error = FALSE)
     if (!glmGamPoi.installed[1]) {
-        stop("Please install the glmGamPoi package to use scoringDE", 
+        stop("Please install the glmGamPoi package to use Run_wtDE", 
              "\nThis can be accomplished with the following command: ", 
              "\n----------------------------------------", "\nBiocManager::install('glmGamPoi')", 
              "\n----------------------------------------", call. = FALSE)
@@ -72,7 +72,7 @@ Run_wtDE = function (object, assay = "RNA", slot = "data", labels = "gene",
     }
     
     # get the PRTBs with weights
-    prtb_score <- Tool(object = object, slot = "PRTBScoring")
+    prtb_score <- Tool(object = object, slot = "RunMixscale")
     wt_PRTB_list = sort(names(prtb_score))
     
     # get the full list of PRTBs 
@@ -455,13 +455,13 @@ Run_wtDE = function (object, assay = "RNA", slot = "data", labels = "gene",
 
 #' Rearrange the DE results into a list of Z-score matrices
 #'
-#' A function to re-arrange the DE results produced by scoringDE() into a list of Z-score matrices. 
+#' A function to re-arrange the DE results produced by Run_wtDE() into a list of Z-score matrices. 
 #' Each matrix represents one cell type (if multiple cell types were included), and contains the 
 #' DE test Z-scores for each valid gene being tested (rows) and each perturbation target (columns).  
 #' 
 #' @export
 #' 
-#' @param de_res the DE results produced by scoringDE(), which is a list of data frames.
+#' @param de_res the DE results produced by Run_wtDE(), which is a list of data frames.
 #' @param p_threshold the DE P-value threshold to define statistically significant DE genes. 
 #' @param fc_threshold the log-fold-change threhsold to define statistically significant DE genes. 
 #' @param num_top_DEG for each perturbation, only the top num_top_DEG DEG within each condition/cell line
