@@ -12,10 +12,10 @@ Run_wtDE(
   nt.class.name = "NT",
   verbose = FALSE,
   PRTB_list = NULL,
-  split.by = "cell_type",
+  split.by = NULL,
   total_ct_labels = "nCount_RNA",
   logfc.threshold = 0.2,
-  pseudocount.use = 0.1,
+  pseudocount.use = 1,
   base = 2,
   min.pct = 0.1,
   min.cells = 10

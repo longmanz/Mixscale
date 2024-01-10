@@ -277,10 +277,14 @@ RunMixscale = function (object, assay = "PRTB", slot = "scale.data", labels = "g
         # only keep the top max.de.genes as the de.genes for PRTB score calculation
         if(!is.null(max.de.genes) ){
             if(length(all.de.genes) <= max.de.genes){
-                print(paste("The number of de.genes (", length(all.de.genes), ") is less than max.de.genes (", max.de.genes, ")."))
+                if(verbose){
+                    message(paste("The number of de.genes (", length(all.de.genes), ") is less than max.de.genes (", max.de.genes, ")."))
+                }
             } else {
-                print(paste("The number of de.genes (", length(all.de.genes), ") is larger than max.de.genes (", max.de.genes, ").",  
-                            "Restricting to top", max.de.genes, "genes..."))
+                if(verbose){
+                    message(paste("The number of de.genes (", length(all.de.genes), ") is larger than max.de.genes (", max.de.genes, ").",  
+                                "Restricting to top", max.de.genes, "genes..."))
+                }
                 all.de.genes = all.de.genes[1:max.de.genes]
             }
         }
@@ -301,8 +305,9 @@ RunMixscale = function (object, assay = "PRTB", slot = "scale.data", labels = "g
             }
             
         }
-        
-        print(paste0("Done with extracting top DE genes for ", gene))
+        if(verbose){
+            message(paste0("Done with extracting top DE genes for ", gene))
+        }
     }
     
     all_markers <- unique(x = unlist(x = prtb_markers))
@@ -311,10 +316,12 @@ RunMixscale = function (object, assay = "PRTB", slot = "scale.data", labels = "g
     object <- Seurat:::GetMissingPerturb(object = object, assay = assay, 
                                          features = missing_genes, verbose = verbose)
     
-    print("Done with getting Missing PRTB")
-    
+    if(verbose){
+        message("Done with getting Missing PRTB")
+    }
     
     for (s in splits) {
+        print(splits)
         cells.s <- cells.s.list[[s]]
         genes <- setdiff(x = unique(x = object[[labels]][cells.s, 
                                                          1]), y = nt.class.name)
@@ -404,11 +411,10 @@ RunMixscale = function (object, assay = "PRTB", slot = "scale.data", labels = "g
             }
             
         }
-        print(paste0("Done with calculating scores for ", s))
+        message(paste0("Done with calculating scores for ", s))
     }
-    Tool(object = object) <- gv.list
-    # Idents(object = object) <- new.class.name
-    # return(list(object, prtb_markers2))
+    SeuratObject::Tool(object = object) <- gv.list
+
     return(object)
 }
 

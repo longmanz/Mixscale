@@ -337,6 +337,7 @@ DEhclust = function(mat = NULL,
     # return the cluster information
     return(list(cluster_assignment = cluster_list, 
                 full_obj = mat.cut,
+                hclust = mat.tree,
                 mat = mat))
     
 }

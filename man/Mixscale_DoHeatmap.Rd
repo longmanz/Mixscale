@@ -13,6 +13,7 @@ Mixscale_DoHeatmap(
   PRTB = NULL,
   slct_condition = "con1",
   slct_features = NULL,
+  slct_ident = NULL,
   ...
 )
 }
@@ -36,6 +37,9 @@ as the default value (i.e., "con1").}
 
 \item{slct_features}{a vector of the names of the selected features (usually some DE 
 genes) to be plotted in the heatmap.}
+
+\item{slct_ident}{if an alternative ident column instead of the "labels" column is desired,
+users can input it here for plotting.}
 }
 \value{
 a ggplot2 object of the single-cell heatmap.

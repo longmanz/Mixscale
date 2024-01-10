@@ -45,10 +45,10 @@ NULL
 Run_wtDE = function (object, assay = "RNA", slot = "data", labels = "gene", 
                       nt.class.name = "NT", verbose = FALSE, 
                       PRTB_list = NULL,
-                      split.by = "cell_type",
+                      split.by = NULL,
                       total_ct_labels = "nCount_RNA",  
                       logfc.threshold = 0.2, 
-                      pseudocount.use = 0.1, 
+                      pseudocount.use = 1, 
                       base = 2,
                       min.pct = 0.1, 
                       min.cells = 10) 
@@ -57,7 +57,7 @@ Run_wtDE = function (object, assay = "RNA", slot = "data", labels = "gene",
     print("Running scoring DE test!\n")
     
     # check if the required package is installed
-    glmGamPoi.installed <- SeuratObject::PackageCheck("glmGamPoi", error = FALSE)
+    glmGamPoi.installed <- rlang::is_installed(pkg = "glmGamPoi")
     if (!glmGamPoi.installed[1]) {
         stop("Please install the glmGamPoi package to use Run_wtDE", 
              "\nThis can be accomplished with the following command: ", 
@@ -95,11 +95,18 @@ Run_wtDE = function (object, assay = "RNA", slot = "data", labels = "gene",
     # count_data_std = GetAssayData(object = object[['RNA']], slot = "data")   # get the std data (required by log-fold change test)
     
     # get the overall covariate matrix from the meta.data
-    mat_B = data.frame(cell_label = colnames(object), 
-                       nCount_RNA = object[[total_ct_labels]][,1], 
-                       cell_type = as.factor(object[[split.by]][,1]), 
-                       gene = object[[labels]][,1] )
-    
+    if(is.null(split.by)) {
+        mat_B = data.frame(cell_label = colnames(object), 
+                           nCount_RNA = object[[total_ct_labels]][,1], 
+                           cell_type = as.factor(names(prtb_score[[1]])), 
+                           gene = object[[labels]][,1] )
+    } else {
+        mat_B = data.frame(cell_label = colnames(object), 
+                           nCount_RNA = object[[total_ct_labels]][,1], 
+                           cell_type = as.factor(object[[split.by]][,1]), 
+                           gene = object[[labels]][,1] )
+    }
+
     # the list to store all the DE results for every PRTB
     all_res = list()
     
@@ -117,7 +124,7 @@ Run_wtDE = function (object, assay = "RNA", slot = "data", labels = "gene",
                 tmp = prtb_score[[PRTB]][[celltype]]
                 
                 # get the idx for NT cells and PRTBed cells
-                idx_NT = which(tmp$gene == "NT")
+                idx_NT = which(tmp$gene == nt.class.name)
                 idx_gene = which(tmp$gene == PRTB)
                 
                 #  1. calculate the overall weights
@@ -169,10 +176,14 @@ Run_wtDE = function (object, assay = "RNA", slot = "data", labels = "gene",
             DE_FLAG = "weighted"
         } else {
             celltype_list = names(prtb_score[[1]])
+            # check if the user forgets to set the split.by argument
+            if(length(celltype_list) > 1 & is.null(split.by)){
+                stop("Please check your 'split.by' argument. Did you forget to set it?")
+            }
             
             print(paste0(PRTB, " does not have score. Will use 0/1 for coding."))
             # 
-            tmp = mat_B[mat_B$gene %in% c(PRTB, "NT"), ]
+            tmp = mat_B[mat_B$gene %in% c(PRTB, nt.class.name), ]
             tmp$weight = 0
             tmp[tmp$gene == PRTB, "weight"] = 1
             
@@ -215,18 +226,19 @@ Run_wtDE = function (object, assay = "RNA", slot = "data", labels = "gene",
             celltype = levels(mat_all$cell_type)[idx_i]
             # get the indices
             idx_NT_celltype = match(mat_all$cell_label[mat_all$cell_type == celltype & 
-                                                           mat_all$gene == "NT"], colnames(object))
+                                                           mat_all$gene == nt.class.name], colnames(object))
             idx_P_celltype = match(mat_all$cell_label[mat_all$cell_type == celltype & 
-                                                          mat_all$gene != "NT"], colnames(object))
+                                                          mat_all$gene != nt.class.name], colnames(object))
             # get the fold-change and min.pct and min.cell
             fc = FoldChange_new(obj = GetAssayData(object = object, slot = "data"),
                                 cells.1 = colnames(object)[idx_NT_celltype],
                                 cells.2 = colnames(object)[idx_P_celltype],
-                                mean.fxn = function(x) log(x = Matrix::rowMeans(x = expm1(x = x)) + pseudocount.use, base = base),
+                                # mean.fxn = function(x) log(x = Matrix::rowMeans(x = expm1(x = x)) + pseudocount.use, base = base), # old version in seurat v4
+                                mean.fxn = function(x) log(x = (rowSums(x = expm1(x = x)) + pseudocount.use)/NCOL(x), base = base),
                                 fc.name = "avg_log2FC",
                                 features = rownames(x = object) ) 
             # overall filtering (including fold-change)
-            fc$status = fc$avg_log2FC >= logfc.threshold & 
+            fc$status = abs(fc$avg_log2FC) >= logfc.threshold & 
                 (fc$pct.1 >= min.pct | fc$pct.2 >= min.pct) & 
                 (fc$min.cell.1 >= min.cells | fc$min.cell.2 >= min.cells)
             
@@ -288,6 +300,7 @@ Run_wtDE = function (object, assay = "RNA", slot = "data", labels = "gene",
             ##    1.  standard DE test 
             # fit the model
             if(length(celltype_list) > 1){
+                # print("cell_type > 1")
                 fit_rough <- glm_gp_disp_only(data = count_data2[idx_for_DE, ], 
                                     design = ~ 0 + cell_type + log_ct, 
                                     col_data = mat_all, 
@@ -302,18 +315,11 @@ Run_wtDE = function (object, assay = "RNA", slot = "data", labels = "gene",
                               size_factors = F, # since we have log_ct in the covariates, we do not need it. 
                               on_disk = FALSE)
             } else {
+                # print("cell_type == 1")
                 # need a different model formula if only one celltype presents (or split.by = F)
-                fit_rough <- glm_gp_disp_only(data = count_data2[idx_for_DE, ], 
-                                    design = ~ 1 + log_ct, 
-                                    col_data = mat_all, 
-                                    size_factors = F, # since we have log_ct in the covariates, we do not need it. 
-                                    on_disk = FALSE)
-                
                 fit <- glm_gp(data = count_data2[idx_for_DE, ], 
                               design = ~ 1 + weight + log_ct, 
                               col_data = mat_all, 
-                              overdispersion = fit_rough$overdispersions, 
-                              overdispersion_shrinkage = F, 
                               size_factors = F, # since we have log_ct in the covariates, we do not need it. 
                               on_disk = FALSE)
             }
@@ -342,7 +348,7 @@ Run_wtDE = function (object, assay = "RNA", slot = "data", labels = "gene",
                 if(gene_rm == PRTB){
                     mat_tmp = mat_all[, c("cell_type", "log_ct", "gene")]
                     mat_tmp$weight = 0
-                    mat_tmp$weight[mat_tmp$gene != "NT"] = 1
+                    mat_tmp$weight[mat_tmp$gene != nt.class.name] = 1
                 } else {
                     mat_tmp = mat_all[, c("cell_type", paste0("weight_", gene_rm), "log_ct")]
                     names(mat_tmp) = c("cell_type", "weight", "log_ct")
@@ -405,18 +411,9 @@ Run_wtDE = function (object, assay = "RNA", slot = "data", labels = "gene",
                               size_factors = F, # since we have log_ct in the covariates, we do not need it. 
                               on_disk = FALSE)
             } else {
-                # need a different model formula if only one celltype presents (or split.by = F)
-                fit_rough <- glm_gp_disp_only(data = count_data2[idx_for_DE, ], 
-                                    design = ~ 1 + log_ct, 
-                                    col_data = mat_all, 
-                                    size_factors = F, # since we have log_ct in the covariates, we do not need it. 
-                                    on_disk = FALSE)
-                
                 fit <- glm_gp(data = count_data2[idx_for_DE, ], 
                               design = ~ 1 + weight + log_ct, 
                               col_data = mat_all, 
-                              overdispersion = fit_rough$overdispersions, 
-                              overdispersion_shrinkage = F, 
                               size_factors = F, # since we have log_ct in the covariates, we do not need it. 
                               on_disk = FALSE)
             }
@@ -439,10 +436,11 @@ Run_wtDE = function (object, assay = "RNA", slot = "data", labels = "gene",
         
         ###########
         #   final step: paste the fold-change info to data.frame "res"
-        res = cbind(res, fc_mat[idx_for_DE, ])
+        res = cbind(res, fc_mat[idx_for_DE, , drop = F])
         res$DE_method = DE_FLAG
         
         # save the DE results for this PRTB to "all_res"
+        rownames(res) = res$gene_ID
         all_res[[PRTB]] = res
         
         print(paste0("DE test for '", PRTB, "' is completed. Number of remaining = ", length(all_PRTB_list) - match(PRTB, all_PRTB_list)))
@@ -491,17 +489,34 @@ get_DE_mat = function(de_res = NULL,
         
         # select 
         total_idx_DE = list()
-        # for each celltype, get the idx for all the DEGs
-        for(CELLTYPE in celltype_list){
-            idx_DE = which( (DE_res[, paste0("p_cell_type", CELLTYPE, ":weight")] <= p_threshold) & 
+        
+        # if there is only one cell type
+        if(length(celltype_list) == 1){
+            CELLTYPE = celltype_list
+            # 
+            idx_DE = which( (DE_res[, paste0("p_weight")] <= p_threshold) & 
                                 (abs(DE_res[, paste0("fc_", CELLTYPE)]) >= fc_threshold) )
             
             if(!is.null(num_top_DEG)){
                 if(length(idx_DE) > num_top_DEG){
-                    idx_DE = idx_DE[order(DE_res[idx_DE, paste0("p_cell_type", CELLTYPE, ":weight")]) <= num_top_DEG]
+                    idx_DE = idx_DE[order(DE_res[idx_DE, paste0("p_weight")]) <= num_top_DEG]
                 }
             }
             total_idx_DE[[CELLTYPE]] = idx_DE
+            
+        } else {
+            # for each celltype, get the idx for all the DEGs
+            for(CELLTYPE in celltype_list){
+                idx_DE = which( (DE_res[, paste0("p_cell_type", CELLTYPE, ":weight")] <= p_threshold) & 
+                                    (abs(DE_res[, paste0("fc_", CELLTYPE)]) >= fc_threshold) )
+                
+                if(!is.null(num_top_DEG)){
+                    if(length(idx_DE) > num_top_DEG){
+                        idx_DE = idx_DE[order(DE_res[idx_DE, paste0("p_cell_type", CELLTYPE, ":weight")]) <= num_top_DEG]
+                    }
+                }
+                total_idx_DE[[CELLTYPE]] = idx_DE
+            }
         }
         
         # 
@@ -510,19 +525,7 @@ get_DE_mat = function(de_res = NULL,
         DE_res$ct_DE = 0
         DE_res$ct_DE[total_idx_DE] = 1
         DE_res = DE_res[order(DE_res$ct_DE, decreasing = T), ]
-        
-        # isDE = vector()
-        # for(i in 1:nrow(DE_res)){
-        #     # count if there is any sig DE for each gene being tested
-        #     ct_DE = sum( (DE_res[i, paste0("p_cell_type", celltype_list, ":weight")] <= p_threshold) & 
-        #                      (abs(DE_res[i, paste0("fc_", celltype_list)]) >= fc_threshold), na.rm = T )
-        #     isDE = c(isDE, ct_DE)
-        # }
-        # DE_res$ct_DE = isDE
-        # DE_res = DE_res[order(DE_res$ct_DE, decreasing = T), ]
-        
-        # print(paste(PRTB, ":", sum(DE_res$ct_DE != 0) ) )
-        
+        # 
         if(sum(DE_res$ct_DE != 0) > 0){
             gene_list = c(gene_list, DE_res[DE_res$ct_DE != 0, "gene_ID"])
             slct_PRTB_list = c(slct_PRTB_list, PRTB)
@@ -547,14 +550,20 @@ get_DE_mat = function(de_res = NULL,
         # 
         for(PRTB in slct_PRTB_list){
             DE_res = de_res[[PRTB]]
-            
-            # 
-            DE_res$z = sign(DE_res[, paste0("beta_cell_type", CELLTYPE, ":weight")]) * sqrt(qchisq(DE_res[, paste0("p_cell_type", CELLTYPE, ":weight")], df = 1, lower.tail = F))
-            logfc_res = DE_res[, c("gene_ID", paste0("fc_", CELLTYPE))]
+            # again, check the length of cell type
+            if(length(celltype_list) == 1){
+                # 
+                DE_res$z = sign(DE_res[, paste0("beta_weight")]) * sqrt(qchisq(DE_res[, paste0("p_weight")], df = 1, lower.tail = F))
+                logfc_res = DE_res[, c("gene_ID", paste0("fc_", CELLTYPE))]
+            } else {
+                # 
+                DE_res$z = sign(DE_res[, paste0("beta_cell_type", CELLTYPE, ":weight")]) * sqrt(qchisq(DE_res[, paste0("p_cell_type", CELLTYPE, ":weight")], df = 1, lower.tail = F))
+                logfc_res = DE_res[, c("gene_ID", paste0("fc_", CELLTYPE))]
+            }
+            #
             DE_res = DE_res[, c("gene_ID", "z")]
             names(DE_res) = c("gene_ID", PRTB)
             merged_dat1 = merge(merged_dat1, DE_res, by = "gene_ID", all.x = T)
-            
             # 
             names(logfc_res) = c("gene_ID", PRTB)
             merged_dat2 = merge(merged_dat2, logfc_res, by = "gene_ID", all.x = T)

@@ -93,11 +93,11 @@ Mixscale_RidgePlot = function(object = NULL,
     }
     
     # adding some more columns 
-    all_scores$status = "NT"
+    all_scores$status = nt.class.name
     all_scores$status[all_scores[[labels]] != nt.class.name] = "perturbed"
     
     all_scores$celltype = factor(x = all_scores$celltype, levels = splits)
-    all_scores$status = factor(all_scores$status, levels = c("NT", "perturbed"))
+    all_scores$status = factor(all_scores$status, levels = c(nt.class.name, "perturbed"))
     
     # generate the ggplot2 object
     if(facet_wrap == "split.by"){
@@ -284,7 +284,8 @@ Mixscale_ScatterPlot = function(object = NULL,
 #' as the default value (i.e., "con1").
 #' @param slct_features a vector of the names of the selected features (usually some DE 
 #' genes) to be plotted in the heatmap. 
-#' 
+#' @param slct_ident if an alternative ident column instead of the "labels" column is desired,
+#' users can input it here for plotting.
 #' @return a ggplot2 object of the single-cell heatmap.
 #' 
 #' 
@@ -297,6 +298,7 @@ Mixscale_DoHeatmap = function(object = NULL,
                                PRTB = NULL, 
                                slct_condition = "con1",
                                slct_features = NULL,
+                              slct_ident = NULL,
                                ...){
     # get the full object of the PRTB scores
     prtb_score <- Tool(object = object, slot = "RunMixscale")
@@ -328,7 +330,7 @@ Mixscale_DoHeatmap = function(object = NULL,
     sub_obj$ident_plot2[target_expression == 0 & sub_obj[[labels]][, 1] != nt.class.name] = "expr = 0"
     sub_obj$ident_plot2[target_expression != 0 & sub_obj[[labels]][, 1] != nt.class.name] = "expr > 0"
     
-    sub_obj$ident_plot2 = factor(x = as.character(sub_obj$ident_plot2), levels = c("NT", "expr > 0", "expr = 0"))
+    sub_obj$ident_plot2 = factor(x = as.character(sub_obj$ident_plot2), levels = c(nt.class.name, "expr > 0", "expr = 0"))
     
     weight_to_reorder <- sub_obj$pvec
     ordered.cells <- names(x = weight_to_reorder)[order(weight_to_reorder, decreasing = F)]
@@ -337,9 +339,14 @@ Mixscale_DoHeatmap = function(object = NULL,
     sub_obj <- ScaleData(object = sub_obj, features = unique(c(PRTB, slct_features)), assay = assay)
     
     ### plot all celltype together
-    p3 = DoHeatmap(object = sub_obj, features = unique(c(PRTB, slct_features)), label = TRUE, cells = ordered.cells, assay = assay, 
-                   group.by = "ident_plot2") + ggtitle(paste0("Ordered by perturbation score"))
-    
+    if(is.null(slct_ident)){
+        p3 = DoHeatmap(object = sub_obj, features = unique(c(PRTB, slct_features)), label = TRUE, cells = ordered.cells, assay = assay, 
+                       group.by = "ident_plot2") + ggtitle(paste0("Ordered by perturbation score"))
+    } else {
+        p3 = DoHeatmap(object = sub_obj, features = unique(c(PRTB, slct_features)), label = TRUE, cells = ordered.cells, assay = assay, 
+                       group.by = slct_ident) + ggtitle(paste0("Ordered by perturbation score"))
+    }
+
     return(p3)
 }
 
