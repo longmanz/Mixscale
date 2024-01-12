@@ -42,7 +42,7 @@ NULL
 #' @export
 #' @concept perturbation_scoring
 
-Run_wtDE = function (object, assay = "RNA", slot = "data", labels = "gene", 
+Run_wtDE = function (object, assay = "RNA", slot = "counts", labels = "gene", 
                       nt.class.name = "NT", verbose = FALSE, 
                       PRTB_list = NULL,
                       split.by = NULL,
@@ -205,7 +205,7 @@ Run_wtDE = function (object, assay = "RNA", slot = "data", labels = "gene",
         # idx_P = match(mat_all$cell_label[mat_all$gene != "NT"], colnames(count_data2))
         
         count_data2 = GetAssayData(object = object[['RNA']], slot = "counts")[, idx]
-        count_data_std2 = GetAssayData(object = object[['RNA']], slot = "data")[, idx]
+        # count_data_std2 = GetAssayData(object = object[['RNA']], slot = "data")[, idx]
         
         # do not do fold-change check, only do var and min.pct check
         # idx_for_DE = which(apply(count_data_std2, MARGIN = 1, FUN = get_idx, idx_P = idx_P, idx_NT = idx_NT, logfc.threshold = logfc.threshold, norm.method = 'log.norm'))
@@ -258,9 +258,11 @@ Run_wtDE = function (object, assay = "RNA", slot = "data", labels = "gene",
                 idx_list = data.frame(celltype = fc_list[[celltype]]$status)
                 idx_list2 = data.frame(celltype = fc_list[[celltype]]$status2)
                 names(idx_list) = celltype
+                names(idx_list2) = celltype
                 # 
                 fc_mat = data.frame(celltype = fc_list[[celltype]]$avg_log2FC)
                 names(fc_mat) = paste0("fc_", celltype)
+                rownames(fc_mat) = rownames(fc_list[[celltype]])
             } else {
                 idx_list[[celltype]] = fc_list[[celltype]]$status
                 idx_list2[[celltype]] = fc_list[[celltype]]$status2
@@ -436,7 +438,11 @@ Run_wtDE = function (object, assay = "RNA", slot = "data", labels = "gene",
         
         ###########
         #   final step: paste the fold-change info to data.frame "res"
-        res = cbind(res, fc_mat[idx_for_DE, , drop = F])
+        # res = cbind(res, fc_mat[idx_for_DE, , drop = F])
+        fc_mat$gene_ID = rownames(fc_mat)
+        res = merge(x = res, y = fc_mat, 
+                    by = "gene_ID", 
+                    all.x =T )
         res$DE_method = DE_FLAG
         
         # save the DE results for this PRTB to "all_res"
