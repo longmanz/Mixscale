@@ -10,10 +10,94 @@ NULL
 #' rank. 
 
 
+#' Wrapper function for DE and enrichment test
+#' 
+#' This function provides a wrapper of Seurat::FindMarkers() and Mixscale::fisher_enrich_test(). 
+#' Users can input a Seurat object they want to investigate and a list of gene sets they want to 
+#' test against, and the wrapper will perform DE tests + Fisher's enrichment test across all the 
+#' available cell types. It will then return a list of data frames, containing gene set enrichment 
+#' results for each cell type. 
+#' 
+#' @param object a seurat object to perform the DE test and the enrichment test
+#' @param plist the pathway gene lists to test the DE genes against
+#' @param labels the metadata column of cell type labels (or other annotations) to loop through
+#' @param conditions the metadata column of the Identity for ident.1 and ident.2 to run DE test
+#' @param ident.1 Identity class to define markers for; pass an object of class phylo or 'clustertree' to find markers for a node in a cluster tree; passing 'clustertree' requires BuildClusterTree to have been run
+#' @param ident.2 A second identity class for comparison; if NULL, use all other cells for comparison; if an object of class phylo or 'clustertree' is passed to ident.1, must pass a node to find markers for
+#' @return a list of data frames containing the gene set enrichment results for each group in "labels"
+#' 
+
+Mixscale_DEenrich <- function(object, 
+                              plist = NULL, 
+                              labels = "cell_type", 
+                              conditions = "treatment",
+                              ident.1 = NULL,
+                              ident.2 = NULL, 
+                              direction = c("up", "down", "both"), 
+                              logfc.threshold = 0.25,
+                              p.val.cutoff = 0.05, 
+                              min.pct = 0.1,
+                              assay = NULL, 
+                              ...){
+    slct_celltype = sort(unique(object[[labels]][, 1]))
+    
+    enrich_list = list()
+    for(CELLTYPE in slct_celltype){
+        object[["new_ident"]] = paste0(object[[labels]][,1], "_", object[[conditions]][,1])
+        ident.1.tmp = paste0(CELLTYPE, "_", ident.1)
+        ident.2.tmp = paste0(CELLTYPE, "_", ident.2)
+        
+        # run DE 
+        Idents(object) = "new_ident"
+        DE_res = FindMarkers(object, 
+                             ident.1 = ident.1.tmp, 
+                             ident.2 = ident.2.tmp, 
+                             min.pct = min.pct, 
+                             logfc.threshold = 0, 
+                             ...)
+        
+        # get the top DEGs separately for up and down regulated genes 
+        upDEG = rownames(DE_res[DE_res$p_val_adj <= p.val.cutoff & DE_res$avg_log2FC > logfc.threshold, ])
+        downDEG = rownames(DE_res[DE_res$p_val_adj <= p.val.cutoff & DE_res$avg_log2FC < -logfc.threshold, ])
+        background = rownames(DE_res) # the background gene list
+        
+        # run enrichment test for the DEGs
+        if(length(downDEG) < 5 | direction == "up"){
+            enrich_res_down = NULL
+        } else {
+            enrich_res_down = fisher_enrich_test(input_list = downDEG, 
+                                                 background = background, 
+                                                 go_term_db = plist)
+            enrich_res_down$num_DEG = length(downDEG)
+            enrich_res_down$direction = "downDEG"
+            enrich_res_down = enrich_res_down[order(enrich_res_down$Pval), ]
+            
+        }
+
+        # 
+        if(length(upDEG) < 5 | direction == "down"){
+            enrich_res_up = NULL
+        } else {
+            enrich_res_up = fisher_enrich_test(input_list = upDEG, 
+                                               background = background, 
+                                               go_term_db = plist)
+            enrich_res_up$num_DEG = length(upDEG)
+            enrich_res_up$direction = "upDEG"
+            enrich_res_up = enrich_res_up[order(enrich_res_up$Pval), ]
+        }
+        
+        # save the results to the list
+        enrich_list[[CELLTYPE]] = rbind(enrich_res_up, enrich_res_down)
+    }
+    
+    return(enrich_list)
+}
+
+
 
 #' Rank biased overlap 
 #' 
-#' Functions for a new gene-set enrichment test based on the 
+#' A function for a new gene-set enrichment test based on the 
 #' RBO (rank biased overlap) calculation with extropolation (Webber et al., 2010).
 #' The core functions of rbo() calculation was modified from the "gespeR" package (original author: Fabian Schmich). 
 #' We modified it to accomodate our package and data type. We also developed a permutation scheme for 

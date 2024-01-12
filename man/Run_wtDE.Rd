@@ -7,7 +7,7 @@
 Run_wtDE(
   object,
   assay = "RNA",
-  slot = "data",
+  slot = "counts",
   labels = "gene",
   nt.class.name = "NT",
   verbose = FALSE,
