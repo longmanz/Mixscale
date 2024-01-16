@@ -14,7 +14,7 @@ Run_wtDE(
   PRTB_list = NULL,
   split.by = NULL,
   total_ct_labels = "nCount_RNA",
-  logfc.threshold = 0.2,
+  logfc.threshold = 0,
   pseudocount.use = 1,
   base = 2,
   min.pct = 0.1,
@@ -46,7 +46,8 @@ perturbation is condition/cell type -specific.}
 \item{logfc.threshold}{the log-fold-change threshold to select genes for DE
 test. Genes with log-fold-change larger than this value will be selected for DE test. 
 Note that if split.by is set and more than 1 split.by group exists, this 
-logfc.threashold will be applied to each group. Default is 0.25.}
+logfc.threashold will be applied to each group and if any of them satisfies this criteria, the 
+gene will be selected. Default is 0 (no filtering).}
 
 \item{pseudocount.use}{Pseudocount to add to averaged expression values when
 calculating logFC. 1 by default.}
