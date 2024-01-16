@@ -9,6 +9,7 @@ NULL
 #' available cell types. It will then return a list of data frames, containing gene set enrichment 
 #' results for each cell type. 
 #' 
+#' @export
 #' @param object a seurat object to perform the DE test and the enrichment test
 #' @param plist the pathway gene lists to test the DE genes against
 #' @param labels the metadata column of cell type labels (or other annotations) to loop through
