@@ -193,29 +193,7 @@ Mixscale_DoHeatmap(object = seurat_obj, PRTB = "GATA1",
                    labels = "gene",
                    slct_features = top_DEG, 
                    slct_ident = "gene") 
-
 ```
-
-We can also explore the DE results for some other perturbations using similar codes as above. 
-```{r DE_heatmap_2, echo=TRUE, message=FALSE, warning=FALSE, cache=FALSE, echo=FALSE}
-# select the top 20 DE genes from on of the perturbation
-for(PRTB in c("GINS1", "MTOR", "TUBB")){
-    top_res = de_res[[PRTB]][order(de_res[[PRTB]]$p_weight)[1:20], ]
-    # order the DE genes based on its log-fold-change
-    top_DEG = rownames(top_res[order(top_res$beta_weight), ])
-
-    # 
-    p = Mixscale_DoHeatmap(object = seurat_obj, PRTB = PRTB, 
-                   slct_condition = "con1", 
-                   nt.class.name = "neg",
-                   labels = "gene",
-                   slct_features = top_DEG, 
-                   slct_ident = "gene") 
-    print(p)
-}
-
-```
-
 
 
 ## Section B. 
