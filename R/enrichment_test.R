@@ -1,6 +1,4 @@
 #'
-NULL
-
 #' This script contains functions for enrichment test: 1. standard enrichment test method based on
 #' Fisher's exact test, which looks at if the overlap between the input gene list and the go-term 
 #' gene set is significantly larger than the overlap between the background control gene list and the go-term
@@ -8,7 +6,7 @@ NULL
 #' overlap between the input gene list and the go-term gene set, but also quantify if the rank of the 2 lists 
 #' are concordant or not. It can be viewed as a weighted Jaccard index that puts decreasing weights to each 
 #' rank. 
-
+NULL
 
 #' Wrapper function for DE and enrichment test
 #' 
@@ -21,6 +19,8 @@ NULL
 #' @param object a seurat object to perform the DE test and the enrichment test
 #' @param plist the pathway gene lists to test the DE genes against
 #' @param labels the metadata column of cell type labels (or other annotations) to loop through
+#' @param slct_labels if users only want to apply the test to a subset of the groups in the 'labels' column, 
+#' they can specify them as a vector using this. 
 #' @param conditions the metadata column of the Identity for ident.1 and ident.2 to run DE test
 #' @param ident.1 Identity class to define markers for; pass an object of class phylo or 'clustertree' to find markers for a node in a cluster tree; passing 'clustertree' requires BuildClusterTree to have been run
 #' @param ident.2 A second identity class for comparison; if NULL, use all other cells for comparison; if an object of class phylo or 'clustertree' is passed to ident.1, must pass a node to find markers for
@@ -30,6 +30,7 @@ NULL
 Mixscale_DEenrich <- function(object, 
                               plist = NULL, 
                               labels = "cell_type", 
+                              slct_labels = NULL,
                               conditions = "treatment",
                               ident.1 = NULL,
                               ident.2 = NULL, 
@@ -40,6 +41,12 @@ Mixscale_DEenrich <- function(object,
                               assay = NULL, 
                               ...){
     slct_celltype = sort(unique(object[[labels]][, 1]))
+    if(!is.null(slct_labels)){
+        slct_celltype = intersect(slct_celltype, slct_labels)
+    }
+    if(length(slct_celltype) == 0){
+        stop("The provided 'labels' column has 0 levels. Please check if 'labels' and 'slct_labels' are correctly specified")
+    }
     
     enrich_list = list()
     for(CELLTYPE in slct_celltype){
@@ -69,7 +76,7 @@ Mixscale_DEenrich <- function(object,
                                                  background = background, 
                                                  go_term_db = plist)
             enrich_res_down$num_DEG = length(downDEG)
-            enrich_res_down$direction = "downDEG"
+            enrich_res_down$direction_DEG = "downDEG"
             enrich_res_down = enrich_res_down[order(enrich_res_down$Pval), ]
             
         }
@@ -82,7 +89,7 @@ Mixscale_DEenrich <- function(object,
                                                background = background, 
                                                go_term_db = plist)
             enrich_res_up$num_DEG = length(upDEG)
-            enrich_res_up$direction = "upDEG"
+            enrich_res_up$direction_DEG = "upDEG"
             enrich_res_up = enrich_res_up[order(enrich_res_up$Pval), ]
         }
         
