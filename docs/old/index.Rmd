@@ -1,0 +1,349 @@
+---
+title: "Calculate perturbation scores for Perturb-seq data"
+author: "Longda Jiang"
+date: "2023-09-12"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE) 
+```
+
+## Introduction
+
+This html file describes a robust computational framework, "perturbation scoring", that allows us to accurately and efficiently capture the wide range of cellular responses to different perturbations in the context of single-cell pooled CRSIPR screens. Instead of treating cells that receive the same gRNA equally, this framework uses a scoring strategy (extended from 'mixscape', see https://satijalab.org/seurat/articles/mixscape_vignette) to capture the variability in each cell's response to the perturbation. Specifically, we introduce functions for: \
+1. calculating 'perturbation scores' for cells that receives the same perturbation across multiple cell lines \
+2. performing scoring-based differential expression (DE) tests to identify DE genes for different perturbations \
+3. performing different levels of decomposition analysis to identify correlated perturbations given their shared DE genes \
+4. performing PCA-based permutation tests to identify shared gene signatures for correlation perturbations \
+5. constructing a gene-set repository for each group of correlated perturbations (similar to a gene-ontology database) \
+5. performing enrichment tests for external gene lists using the gene-set repo generated above \
+\
+
+## load the packages
+```{r load_package, message=FALSE, warning=FALSE}
+library(devtools)
+library(Seurat)
+library(ggridges)
+library(PRTBScoring)
+```
+
+## 0. load the demo data 
+The demo dataset contains CRISPRi Perturb-seq data for the IFN-gamma pathway. The perturbation targets include "IFNGR1", "IRF1", "IRF2", "JAK1", "STAT1", etc..
+
+```{r load_data, message=FALSE, warning=FALSE, cache=FALSE}
+seurat_obj = readRDS(file = "/Users/uqljian5/Desktop/Lab_stuffs_NYGC/raw_seq_processing_2021Dec/mixscape_dat10x_NovaSeq_2021Dec07.rds")
+seurat_obj$cell_type = seurat_obj$HTO_classification
+seurat_obj$cell_type[seurat_obj$cell_type == "Negative"] = "K562"
+DefaultAssay(seurat_obj) = "RNA"
+seurat_obj[['PRTB']] = NULL 
+
+# select a subset of perturbations for our demo
+# the perturbation identity is stored in the "gene" column in the meta.data
+seurat_obj = subset(seurat_obj, subset = gene %in% c("NT", "ZC3H3", "IFNGR1", "IFNGR2",
+                                                     "IRF1", "IRF2", "IRF5", "JUN", "MAFF", 
+                                                     "PARP12", "RUNX1",
+                                                     "JAK1", "JAK2", 
+                                                     "STAT1", "STAT2", "STAT3"))
+table(seurat_obj$gene, seurat_obj$cell_type)
+```
+
+
+## 1. Standard processing
+To perform standard processing for the dataset.
+```{r standard_process, echo=TRUE, message=FALSE, warning=FALSE, cache=FALSE}
+seurat_obj = NormalizeData(seurat_obj)
+seurat_obj = FindVariableFeatures(seurat_obj)
+seurat_obj = ScaleData(seurat_obj)
+seurat_obj = RunPCA(seurat_obj)
+seurat_obj = RunUMAP(seurat_obj, dims = 1:40)
+DimPlot(seurat_obj, group.by = "cell_type")
+
+```
+
+
+## 2. Calculate perturbation signatures (correcting for confounding)
+To use the CalcPerturbSig() function from "Mixscape" to correct for confounding factors in each cell.
+```{r calc_prtb_sig, echo=TRUE, message=FALSE, warning=FALSE, cache=FALSE}
+seurat_obj <- CalcPerturbSig(
+    object = seurat_obj, 
+    assay = "RNA", 
+    slot = "data", 
+    gd.class ="gene", 
+    nt.cell.class = "NT", 
+    reduction = "pca", 
+    ndims = 40, 
+    num.neighbors = 20,   
+    new.assay.name = "PRTB", 
+    split.by = "cell_type")  
+
+```
+
+
+## 3. Perturbation scoring 
+This part will use the scoring strategy to assign a score to each cell. The score represents the perturbation strength
+each cell undergoes. 
+
+```{r, echo=TRUE, cache=FALSE}
+seurat_obj = PRTBScoring(
+    object = seurat_obj, 
+    assay = "PRTB", 
+    slot = "scale.data", 
+    labels = "gene",   
+    nt.class.name = "NT",    
+    min.de.genes = 5,      
+    split.by = "cell_type", 
+    logfc.threshold = 0.2,  
+    de.assay = "RNA",   
+    max.de.genes = 100,     
+    prtb.type = "P",        
+    new.class.name = "mixscape_v1",  
+    fine.mode = F,           
+    harmonize = T,          
+    seed = 1)
+
+# take a look at the scores
+Tool(seurat_obj, slot = "PRTBScoring")[[1]][[1]][1:5, 1:2]
+
+```
+
+## 3.5 Some visualizations for the scores
+We will now use some plotting functions to explore the perturbation scores that we just calculated. 
+```{r, echo=TRUE, message=FALSE, warning=FALSE, cache=FALSE}
+# a. Check the distribution of the scores 
+PRTBscore_RidgePlot(object = seurat_obj, split.by = "cell_type", 
+                    PRTB = c("IFNGR1", "IRF1", "STAT1"), 
+                    facet_wrap = "gene", facet_scale = "fixed", 
+                    slct_split.by = c("A549", "HT29", "MCF7"), 
+                    facet_nrow = 2)
+
+# b. Check if the scores correlate with the expression level of the target gene itself
+PRTBscore_ScatterPlot(object = seurat_obj, split.by = "cell_type", 
+                      PRTB = c("IFNGR2", "JAK1", "IRF1", "STAT1"), 
+                      facet_wrap = "gene", facet_scale = "free_y")
+
+# c. Check the single-cell heatmap (stratified by the expression level of the target genes)
+PRTBscore_DoHeatmap(object = seurat_obj, PRTB = "STAT1", slct_condition = "A549", 
+                    slct_features = c("IRF1",  "STAT2",  "B2M", "WARS", "JAK1", 
+                                      "CCR5", "CXCL9", "CXCL10", "CXCL11", "IDO1"))
+
+```
+
+
+## 4. Perform scoring-based DE test 
+This step will incorporate the scores we just calculated and use them in the differential expression tests. By using 
+the scores as a 'weight' for the perturbed cells (instead of universally coding them as 1), we can achieve a higher
+statistical power.
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE, cache=FALSE}
+de_res = scoringDE(object = seurat_obj, assay = "RNA", slot = "counts", 
+                   PRTB_list = c("RFX5", "ZC3H3", "IFNGR1", "IFNGR2",
+                                 "IRF1", "IRF2",  "JUN", "MAFF", 
+                                 "PARP12", "TRAFD1",
+                                 "JAK1", 
+                                 "STAT1", "SP100"),
+                   labels = "gene")
+
+# have a quick look at the DE results
+head(de_res[[1]][order(de_res[[1]][, 24]), c(23:31)])
+
+# re-arrange the results into a list of DE Z-score matrices, removing non-significant DE genes.
+# the function will summarize the number of significant DE genes in the screen output.
+DEG_mat_main = get_DE_mat(de_res, p_threshold = 0.05/30000, fc_threshold = 0.2)
+
+```
+
+
+## 5. Decomposition
+In this section we will perform a series of decomposition analyses for our DE results. We will also 
+perform PCA-based permutation tests to extract the gene signatures for the correlated perturbations. 
+We will then aggregate all the gene signatures and arrange them into a repository of different 
+sets of gene signatures.
+
+### 5.1 within perturbation decomposition
+```{r, echo=TRUE, message=FALSE, warning=FALSE, cache=FALSE}
+# an empty list to store all the gene sets (a repository of gene sets)
+go_db = list()
+
+# 5.1 within-prtb decomposition
+# to slightly clean up the matrices before decomposition
+DEG_mat = prune_DE_mat(DEG_mat_main, mask_target = T, min_sig_DEG = 0)
+
+celltype_list = names(DEG_mat)
+PRTB_list = colnames(DEG_mat[[1]])
+gene_ID = rownames(DEG_mat[[1]])
+
+# loop through all the perturbations in our dataset
+for(i in 1:length(PRTB_list)){
+    PRTB = PRTB_list[i]   
+    
+    tmp=list()
+    for(CELLTYPE in celltype_list){
+        if(PRTB %in% colnames(DEG_mat[[CELLTYPE]])){
+            tmp[[CELLTYPE]] = DEG_mat[[CELLTYPE]][, PRTB]
+        }
+    }
+    tmp = Reduce(cbind, tmp)
+    colnames(tmp) = celltype_list
+    rownames(tmp) = gene_ID
+
+    #  run Permutation test and extract gene signatures
+    #  before each permutation test, PCApermtest() will further filter the 
+    #  sub-matrix by removing any row (gene) without raw DE P-value <= 0.05 in any column (perturbation).
+    res = PCApermtest(mat = tmp, row_filtering_pval = 0.05, k = 1)
+    sig_genes = get_sig_genes(perm_obj = res, k = 1, collapse = T)
+    
+    ## plot Z-score heatmap for the gene signatures
+    ## !!! this is currently commented out, but remove the '#' if you decide to run them
+    ##     the figures will be automatically saved to the folder you specify.
+    #  DE_heatmap(obj = res, sig_genes = sig_genes, type = "standard", direction = "both", top_n = 30, 
+    #             output_path = "/Users/uqljian5/Desktop/test_multiCCA/level1/", 
+    #             prefix = PRTB)
+    
+    # store the gene signatures to the go-term repo
+    if(length(sig_genes$upDEGs) >= 10){
+        go_db[[paste0(PRTB, "_upDEGs")]] = sig_genes$upDEGs
+    } 
+    if(length(sig_genes$downDEGs) >= 10){
+        go_db[[paste0(PRTB, "_downDEGs")]] = sig_genes$downDEGs
+    } 
+}
+
+
+```
+
+
+### 5.2 within cell type decomposition
+```{r, echo=TRUE, message=FALSE, warning=FALSE, cache=FALSE}
+# clean up the matrices
+DEG_mat = prune_DE_mat(DEG_mat_main, mask_target = T, min_sig_DEG = 3)
+
+celltype_list = names(DEG_mat)
+PRTB_list = colnames(DEG_mat[[1]])
+gene_ID = rownames(DEG_mat[[1]])
+
+# loop through all the cell types in our datasets
+for(i in 1:length(celltype_list)){
+    CELLTYPE = celltype_list[i]
+    tmp=DEG_mat[[CELLTYPE]]
+
+    #  run Permutation test and extract gene signatures
+    res = DEhclust(mat = tmp)
+    
+    # get_sig_genes_DEhclust() is a wrapper function for PCApermtest() and get_sig_genes() for DEhclust object.
+    sig_genes = get_sig_genes_DEhclust(obj = res, row_filtering_pval = 0.05)
+    
+    ##  plot Z-score heatmap for the gene signatures
+    ##  remove the '#' to generate the figures.
+    # DE_heatmap(obj = res, sig_genes = sig_genes, type = "hclust", direction = "both", top_n = 30, 
+    #            output_path = "/Users/uqljian5/Desktop/test_multiCCA/level2/", 
+    #            prefix = CELLTYPE)
+    
+    # store the gene signatures to the go-term repo
+    for(CLUSTER in names(sig_genes)){
+        if(length(sig_genes[[CLUSTER]]$sig_genes$upDEGs) >= 10){
+            go_db[[paste0(CELLTYPE, "_", CLUSTER, "_upDEGs")]] = sig_genes[[CLUSTER]]$sig_genes$upDEGs
+        } 
+        if(length(sig_genes[[CLUSTER]]$sig_genes$downDEGs) >= 10){
+            go_db[[paste0(CELLTYPE, "_", CLUSTER,"_downDEGs")]] = sig_genes[[CLUSTER]]$sig_genes$downDEGs
+        } 
+    }
+
+}
+
+```
+
+
+### 5.3 MultiCCA analysis (decomposition across cell types and perturbations)
+```{r, echo=TRUE, message=FALSE, warning=FALSE, cache=FALSE}
+# clean up the matrices 
+DEG_mat = prune_DE_mat(DEG_mat_main, mask_target = T, min_sig_DEG = 1, center = T)
+
+celltype_list = names(DEG_mat)
+PRTB_list = colnames(DEG_mat[[1]])
+gene_ID = rownames(DEG_mat[[1]])
+
+#  run Permutation test and extract gene signatures
+res = DEmultiCCA(mat_list = DEG_mat, cor_coef_thres = 0.8, max_k = 3, standardize = T)  
+
+# get_sig_genes_DEmultiCCA is a wrapper function for PCApermtest() and get_sig_genes() for DEmultiCCA object.
+sig_genes = get_sig_genes_DEmultiCCA(res, row_filtering_pval = 0.05)
+
+##  visualization. 
+##  remove '#' to generate the figures
+# DE_heatmap(obj = res, sig_genes = sig_genes, 
+#            type = "multiCCA", direction = "both", 
+#            top_n = 30, labRow = T, output_path = "/Users/uqljian5/Desktop/test_multiCCA/level3/", 
+#            prefix = "IFNG")
+
+# store the gene signatures to the go-term repo
+for(PROGRAM in names(sig_genes)){
+    if(length(sig_genes[[PROGRAM]]$sig_genes$upDEGs) >= 10){
+        go_db[[paste0("IFNG_", PROGRAM, "_upDEGs")]] = sig_genes[[PROGRAM]]$sig_genes$upDEGs
+    } 
+    if(length(sig_genes[[PROGRAM]]$sig_genes$downDEGs) >= 10){
+        go_db[[paste0("IFNG_", PROGRAM, "_downDEGs")]] = sig_genes[[PROGRAM]]$sig_genes$downDEGs
+    } 
+}
+
+```
+
+
+## 6. Enrichment analysis
+After generating the repository of the gene sets, we will now use it to perform enrichment analyses. Enrichment tests 
+aim to identify if a user input gene list shows any significant overlap with an existing gene-ontology (GO) gene set. In our 
+case, the GO gene sets are generated as above, each represent the gene signatures of a perturbation or a group of correlated 
+perturbations. \
+We implemented two different methods for enrichment analyses:\
+1. a standard enrichment test method based on Fisher's exact test. \
+2. a novel enrichment test method based on rank biased overlap (RBO). This method has the advantage that it not only
+shows the overlap between 2 lists, but also takes the consistency of the rank of each gene into consideration. \
+\
+For demonstration, we will use the DE genes identified for "JAK2" perturbation from the same dataset 
+(which was not included in our above analyses) as the input gene list, and test it against the gene set 
+repository we just generated. \
+
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE, cache=FALSE}
+
+# a. DE tests for JAK2 in A549 cell line. The DE genes will be used as the input gene list. 
+seurat_obj$Condition = paste0(seurat_obj$cell_type, "_", seurat_obj$gene)
+Idents(seurat_obj) = "Condition"
+
+new_DE_test = FindMarkers(seurat_obj, ident.1 = "A549_NT", ident.2 = "A549_JAK2", 
+                          slot = "data", logfc.threshold = 0)
+
+# get the background gene list for conventional enrich test
+background = rownames(new_DE_test)
+# get the significant down-reg genes (the input list )
+input_list = rownames(new_DE_test[new_DE_test$p_val_adj <= 0.05 & new_DE_test$avg_log2FC > 0.2, ])
+
+
+# b. Conventional enrichment test (Fisher's exact test)
+fisher_enrich_res = fisher_enrich_test(input_list = input_list, 
+                                       background = background, 
+                                       go_term_db = go_db)
+fisher_enrich_res = fisher_enrich_res[order(fisher_enrich_res$Pval), ]
+
+head(fisher_enrich_res, 10)
+
+# c. Rank biased overlap based test 
+# RBO test does NOT require pre-select DEGs based on P-value or log-fold-change. We can simply input the 
+#  complete list of ordered DE genes as the input gene list. (here it is ordered by P-values)
+input_list2 = rownames(new_DE_test[new_DE_test$avg_log2FC > 0, ])
+
+rbo_enrich_res = rbo_enrich_test(input_list = input_list2, 
+                                 go_term_db = go_db, 
+                                 p = 0.98, 
+                                 k = 100,
+                                 side = "bottom")
+
+rbo_enrich_res = rbo_enrich_res[order(rbo_enrich_res$RBO, decreasing = T), ]
+rownames(rbo_enrich_res) = NULL
+
+head(rbo_enrich_res, 10)
+
+```
+
+
