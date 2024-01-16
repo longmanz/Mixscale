@@ -1,11 +1,4 @@
 #'
-#' This script contains functions for enrichment test: 1. standard enrichment test method based on
-#' Fisher's exact test, which looks at if the overlap between the input gene list and the go-term 
-#' gene set is significantly larger than the overlap between the background control gene list and the go-term
-#' gene set. 2. a new enrichment test method using the rank biased overlap (RBO, Webber et al. 2010), which not only quantifies the 
-#' overlap between the input gene list and the go-term gene set, but also quantify if the rank of the 2 lists 
-#' are concordant or not. It can be viewed as a weighted Jaccard index that puts decreasing weights to each 
-#' rank. 
 NULL
 
 #' Wrapper function for DE and enrichment test

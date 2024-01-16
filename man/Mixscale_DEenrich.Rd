@@ -2,19 +2,13 @@
 % Please edit documentation in R/enrichment_test.R
 \name{Mixscale_DEenrich}
 \alias{Mixscale_DEenrich}
-\title{This script contains functions for enrichment test: 1. standard enrichment test method based on
-Fisher's exact test, which looks at if the overlap between the input gene list and the go-term 
-gene set is significantly larger than the overlap between the background control gene list and the go-term
-gene set. 2. a new enrichment test method using the rank biased overlap (RBO, Webber et al. 2010), which not only quantifies the 
-overlap between the input gene list and the go-term gene set, but also quantify if the rank of the 2 lists 
-are concordant or not. It can be viewed as a weighted Jaccard index that puts decreasing weights to each 
-rank. 
-Wrapper function for DE and enrichment test}
+\title{Wrapper function for DE and enrichment test}
 \usage{
 Mixscale_DEenrich(
   object,
   plist = NULL,
   labels = "cell_type",
+  slct_labels = NULL,
   conditions = "treatment",
   ident.1 = NULL,
   ident.2 = NULL,
@@ -32,6 +26,9 @@ Mixscale_DEenrich(
 \item{plist}{the pathway gene lists to test the DE genes against}
 
 \item{labels}{the metadata column of cell type labels (or other annotations) to loop through}
+
+\item{slct_labels}{if users only want to apply the test to a subset of the groups in the 'labels' column, 
+they can specify them as a vector using this.}
 
 \item{conditions}{the metadata column of the Identity for ident.1 and ident.2 to run DE test}
 

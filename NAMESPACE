@@ -2,6 +2,7 @@
 
 export(DE_MultiwayPlot)
 export(DE_heatmap)
+export(DEenrich_DotPlot)
 export(DEhclust)
 export(DEmultiCCA)
 export(FoldChange_new)
