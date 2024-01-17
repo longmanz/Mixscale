@@ -16,10 +16,3 @@ You can easily install the package by the following command:
 ```
 install_github("longmanz/Mixscale")
 ```
-\
-Or, if you prefer to download it first and then install it locally, please use the following command
-```
-git clone https://github.com/longmanz/Mixscale.git
-devtools::load_all("/path_to_the_downloaded_directory/")
-```
-
