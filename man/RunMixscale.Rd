@@ -10,7 +10,7 @@ RunMixscale(
   slot = "scale.data",
   labels = "gene",
   nt.class.name = "NT",
-  new.class.name = "mixscape_class",
+  new.class.name = "mixscale_score",
   min.de.genes = 5,
   min.cells = 5,
   de.assay = "RNA",
@@ -19,7 +19,6 @@ RunMixscale(
   split.by = NULL,
   fine.mode = FALSE,
   fine.mode.labels = "guide_ID",
-  prtb.type = "KO",
   DE.gene = NULL,
   max.de.genes = 100,
   harmonize = F,
@@ -39,7 +38,7 @@ RunMixscale(
 
 \item{nt.class.name}{Classification name of non-targeting gRNA cells.}
 
-\item{new.class.name}{Name of mixscape classification to be stored in
+\item{new.class.name}{Name of mixscale scores to be stored in
 metadata.}
 
 \item{min.de.genes}{Required number of genes that are differentially
@@ -68,8 +67,6 @@ for calculating the perturbation score of every cell and their subsequent
 classification.}
 
 \item{fine.mode.labels}{metadata column with gRNA ID labels.}
-
-\item{prtb.type}{specify type of CRISPR perturbation expected for labeling mixscape classifications. Default is KO.}
 
 \item{DE.gene}{specify a list of user-defined large-effect DE genes to calculate the perturbation score.}
 

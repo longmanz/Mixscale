@@ -19,7 +19,7 @@ NULL
 #' @param slot Assay data slot to use.
 #' @param labels metadata column with target gene labels.
 #' @param nt.class.name Classification name of non-targeting gRNA cells.
-#' @param new.class.name Name of mixscape classification to be stored in
+#' @param new.class.name Name of mixscale scores to be stored in
 #' metadata.
 #' @param min.de.genes Required number of genes that are differentially
 #' expressed for method to separate perturbed and non-perturbed cells.
@@ -40,8 +40,6 @@ NULL
 #' for calculating the perturbation score of every cell and their subsequent
 #' classification.
 #' @param fine.mode.labels metadata column with gRNA ID labels.
-#' @param prtb.type specify type of CRISPR perturbation expected for labeling mixscape classifications. Default is KO.
-#' 
 #' @param DE.gene specify a list of user-defined large-effect DE genes to calculate the perturbation score.
 #' @param max.de.genes the maximum number of top large-effect DE genes to calculate the perturbation score. Default is 100. 
 #' @param harmonize a boolen value to specify whether a harmonization of the cell-type proportion between the NT cells and 
@@ -57,10 +55,11 @@ NULL
 #' @concept perturbation_scoring
 
 RunMixscale = function (object, assay = "PRTB", slot = "scale.data", labels = "gene", 
-                        nt.class.name = "NT", new.class.name = "mixscape_class", 
+                        nt.class.name = "NT", 
+                        new.class.name = "mixscale_score", 
                         min.de.genes = 5, min.cells = 5, de.assay = "RNA", logfc.threshold = 0.25, 
                         verbose = FALSE, split.by = NULL, fine.mode = FALSE, 
-                        fine.mode.labels = "guide_ID", prtb.type = "KO", 
+                        fine.mode.labels = "guide_ID", 
                         DE.gene = NULL, max.de.genes = 100, harmonize = F, 
                         min_prop_ntgd = 0.1, pval.cutoff = 0.05, 
                         seed = 10282021) 
@@ -80,7 +79,6 @@ RunMixscale = function (object, assay = "PRTB", slot = "scale.data", labels = "g
     object[[new.class.name]] <- object[[labels]]
     object[[new.class.name]][, 1] <- as.character(x = object[[new.class.name]][, 
                                                                                1])
-    object[[paste0(new.class.name, "_p_", tolower(x = prtb.type))]] <- 0
     gv.list <- list()
     if (is.null(x = split.by)) {
         split.by <- splits <- "con1"
@@ -338,8 +336,7 @@ RunMixscale = function (object, assay = "PRTB", slot = "scale.data", labels = "g
                     message("  Fewer than ", min.de.genes, " DE genes for ", 
                             gene, ". Assigning cells as NP.")
                 }
-                object[[new.class.name]][orig.guide.cells, 1] <- paste0(gene, 
-                                                                        " NP")
+                object[[new.class.name]][orig.guide.cells, 1] <- paste0(gene, " NP")
             }
             else {
                 if (verbose) {
@@ -413,8 +410,81 @@ RunMixscale = function (object, assay = "PRTB", slot = "scale.data", labels = "g
         }
         message(paste0("Done with calculating scores for ", s))
     }
-    SeuratObject::Tool(object = object) <- gv.list
+    # SeuratObject::Tool(object = object) <- gv.list
+    
+    # added Jan 16: calculate the standardized scores and append them to the meta-data
+    # get the list of PRTBs 
+    wt_PRTB_list = sort(names(gv.list))
+    all_PRTB_list = sort(unique(object[[labels]][,1]))
+    all_PRTB_list = all_PRTB_list[all_PRTB_list != nt.class.name]
+    wt_PRTB_list = wt_PRTB_list[wt_PRTB_list %in% all_PRTB_list]
+    
+    # 
+    if(is.null(split.by)) {
+        mat_B = data.frame(cell_label = colnames(object), 
+                           gene = object[[labels]][,1] )
+    } else {
+        mat_B = data.frame(cell_label = colnames(object), 
+                           gene = object[[labels]][,1] )
+    }
+    
+    # 
+    all_score = data.frame() # to store the scores from each PRTB
+    for(PRTB in all_PRTB_list){
+        mat_A = data.frame()
+        # check if the scores are calculated successful for this PRTB
+        if(PRTB %in% wt_PRTB_list){
+            celltype_list = names(gv.list[[PRTB]])
+            for(celltype in celltype_list){
+                tmp = gv.list[[PRTB]][[celltype]][, c("pvec", "gene"), drop = FALSE]
 
+                # get the idx for NT cells and PRTBed cells
+                idx_NT = which(tmp$gene == nt.class.name)
+                idx_gene = which(tmp$gene == PRTB)
+                
+                #  1. calculate the overall weights
+                # calculate the mean and sd of the PRTB score for the NT cells
+                mean_NT = mean(tmp$pvec[idx_NT], na.rm = T)
+                sd_NT = sd(tmp$pvec[idx_NT], na.rm = T)
+                # standardize the PRTB scores for the PRTBed cells based on the mean and SD from those of the NT cells
+                std_weight_gene = (tmp$pvec[idx_gene] - mean_NT)/sd_NT
+                # convert those negative standardised PRTB score to 0
+                # std_weight_gene[which(std_weight_gene < 0)] = 0
+                
+                # create a new column called "weight" in the tmp dataframe. 
+                tmp$weight = 0 
+                tmp$weight[idx_gene] = std_weight_gene
+                
+                tmp$cell_label = row.names(tmp)
+                tmp = tmp[, c("cell_label", "gene", "pvec", "weight")]
+                
+                mat_A = rbind(mat_A, tmp)
+                rm(tmp)
+            }
+        } else {
+            celltype_list = names(gv.list[[1]])
+            # 
+            tmp = mat_B[mat_B$gene %in% c(PRTB, nt.class.name), ]
+            tmp$weight = 0
+            tmp[tmp$gene == PRTB, "weight"] = 1
+            tmp$pvec = tmp$weight
+            # 
+            tmp = tmp[, c("cell_label", "gene", "pvec", "weight")]
+            mat_A = tmp
+            rm(tmp)
+        }
+        all_score = rbind(all_score, mat_A)
+    }
+    
+    # some final editing
+    all_score = all_score[!duplicated(all_score$cell_label), ]
+    rownames(all_score) = all_score$cell_label
+    all_score = all_score[, "weight", drop = FALSE]
+    names(all_score) = new.class.name
+    
+    # add the standardized scores to the meta-data
+    object = AddMetaData(object, metadata = all_score)
+    
     return(object)
 }
 
