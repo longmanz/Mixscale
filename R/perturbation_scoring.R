@@ -50,8 +50,8 @@ NULL
 #' @param pval.cutoff specify the DE test p-value cutoff (after Bonferroni correction) to select top large-effect DE genes.
 #' Default is 0.05. 
 #' 
-#' @return Returns a Seurat object containing the perturbation scores. It is stored in the Tool Data of the object, not in the 
-#' meta.data. 
+#' @return Returns a Seurat object containing the perturbation scores. It is stored in the Tool Data of the object, also 
+#' the standardized scores are stored in the meta.data (column is specified by new.class.name). 
 #' @concept perturbation_scoring
 
 RunMixscale = function (object, assay = "PRTB", slot = "scale.data", labels = "gene", 
@@ -410,7 +410,7 @@ RunMixscale = function (object, assay = "PRTB", slot = "scale.data", labels = "g
         }
         message(paste0("Done with calculating scores for ", s))
     }
-    # SeuratObject::Tool(object = object) <- gv.list
+    SeuratObject::Tool(object = object) <- gv.list
     
     # added Jan 16: calculate the standardized scores and append them to the meta-data
     # get the list of PRTBs 
@@ -481,6 +481,8 @@ RunMixscale = function (object, assay = "PRTB", slot = "scale.data", labels = "g
     rownames(all_score) = all_score$cell_label
     all_score = all_score[, "weight", drop = FALSE]
     names(all_score) = new.class.name
+    # 
+    object[[new.class.name]] = NULL
     
     # add the standardized scores to the meta-data
     object = AddMetaData(object, metadata = all_score)
