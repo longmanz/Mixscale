@@ -60,11 +60,12 @@ RunMixscale = function (object, assay = "PRTB", slot = "scale.data", labels = "g
                         min.de.genes = 5, min.cells = 5, de.assay = "RNA", logfc.threshold = 0.25, 
                         verbose = FALSE, split.by = NULL, fine.mode = FALSE, 
                         fine.mode.labels = "guide_ID", 
-                        DE.gene = NULL, max.de.genes = 100, harmonize = F, 
+                        DE.gene = NULL, 
+                        max.de.genes = 100, harmonize = F, 
                         min_prop_ntgd = 0.1, pval.cutoff = 0.05, 
                         seed = 10282021) 
 {
-    print("Running Mixscale scoring to calculate the perturbation scores \n")
+    message("Calculating Mixscale scores ...")
     
     assay <- assay %||% DefaultAssay(object = object)
     if(!assay %in% names(object@assays)){
@@ -117,7 +118,7 @@ RunMixscale = function (object, assay = "PRTB", slot = "scale.data", labels = "g
                 ])[which(x = object[[]][orig.guide.cells, 
                                         fine.mode.labels] == gd)]
                 # we will need to extract the NT cells based on each celltype and do harmonization based on cell comp in PRTB cells
-                if(harmonize == T){
+                if(harmonize == T & length(split.by) > 1){
                     # this is a flag to indicate if the harmonization process is okay (selected_Cell >= 50% of total cell)
                     flag_good_harm = F
                     # the initial list of split-groups
@@ -148,7 +149,7 @@ RunMixscale = function (object, assay = "PRTB", slot = "scale.data", labels = "g
                         if(sum.desire.length.ntgd >= min_prop_ntgd*sum(length.ntgd, na.rm = T) ){
                             flag_good_harm = T
                         } else {
-                            print(paste("Removing cell from ", splits_list[which.min(length.ntgd)], "due to 50% check during harmonization step."))
+                            message(paste("Removing cell from ", splits_list[which.min(length.ntgd)], "due to 50% check during harmonization step."))
                             splits_list = splits_list[-which.min(length.ntgd)]
                         }
                     }
@@ -167,7 +168,7 @@ RunMixscale = function (object, assay = "PRTB", slot = "scale.data", labels = "g
                     sub.ntgd.cells = Reduce(c, sub.cells.s.list.ntgd)
                     rm(cells.s.list.gd, cells.s.list.ntgd, length.gd, length.ntgd, prop.gd, sum.desire.length.ntgd, desire.length.ntgd, sub.cells.s.list.ntgd)
                     if(verbose){
-                        print("Done with harmonizing the cell composition in NT cells (fine mode).")
+                        message("Done with harmonizing the cell composition in NT cells (fine mode).")
                     }
                     
                     Idents(object = object) <- labels
@@ -181,7 +182,7 @@ RunMixscale = function (object, assay = "PRTB", slot = "scale.data", labels = "g
                         all.de.genes = DE.gene[[gene]]
                     } else {
                         all.de.genes = character()
-                        print(paste("No de.genes are provided for PRTB:", gene, ". Pls check!"))
+                        warning(paste("No de.genes are provided for PRTB:", gene, ". Pls check!"))
                     }
                 } else {
                     # run DE 
@@ -195,7 +196,7 @@ RunMixscale = function (object, assay = "PRTB", slot = "scale.data", labels = "g
             all.de.genes <- unique(all.de.genes)
         } else {
             # we will need to extract the NT cells based on each celltype and do harmonization based on cell comp in PRTB cells
-            if(harmonize == T){
+            if(harmonize == T & length(split.by) > 1){
                 # this is a flag to indicate if the harmonization process is okay (selected_Cell >= 50% of total cell)
                 flag_good_harm = F
                 # the initial list of split-groups
@@ -226,7 +227,7 @@ RunMixscale = function (object, assay = "PRTB", slot = "scale.data", labels = "g
                     if(sum.desire.length.nt >= min_prop_ntgd*sum(length.nt, na.rm = T) ){
                         flag_good_harm = T
                     } else {
-                        print(paste("Removing cell from ", splits_list[which.min(length.nt)], "due to 50% check during harmonization step."))
+                        message(paste("Removing cell from ", splits_list[which.min(length.nt)], "due to 50% check during harmonization step."))
                         splits_list = splits_list[-which.min(length.nt)]
                     }
                 }
@@ -245,7 +246,7 @@ RunMixscale = function (object, assay = "PRTB", slot = "scale.data", labels = "g
                 sub.nt.cells = Reduce(c, sub.cells.s.list.nt)
                 rm(cells.s.list.gene, cells.s.list.nt, length.gene, length.nt, prop.gene, sum.desire.length.nt, desire.length.nt, sub.cells.s.list.nt)
                 if(verbose){
-                    print("Done with harmonizing the cell composition in NT cells.")
+                    message("Done with harmonizing the cell composition in NT cells.")
                 }
                 
                 Idents(object = object) <- labels
@@ -258,7 +259,7 @@ RunMixscale = function (object, assay = "PRTB", slot = "scale.data", labels = "g
                     all.de.genes = DE.gene[[gene]]
                 } else {
                     all.de.genes = character()
-                    print(paste("No de.genes are provided for PRTB:", gene, ". Pls check!"))
+                    message(paste("No de.genes are provided for PRTB:", gene, ". Pls check!"))
                 }
             } else {
                 all.de.genes <- Seurat:::TopDEGenesMixscape(object = object, 
@@ -319,7 +320,7 @@ RunMixscale = function (object, assay = "PRTB", slot = "scale.data", labels = "g
     }
     
     for (s in splits) {
-        print(splits)
+        # print(splits)
         cells.s <- cells.s.list[[s]]
         genes <- setdiff(x = unique(x = object[[labels]][cells.s, 
                                                          1]), y = nt.class.name)
@@ -402,7 +403,7 @@ RunMixscale = function (object, assay = "PRTB", slot = "scale.data", labels = "g
                 
                 # the second step to calculate the leave-one-out (LOO) PRTB score  
                 if(verbose){
-                    cat(paste0("Done calculating LOO PRTB score for ", length(de.genes), " genes in ", s, "...\n"))
+                    message(paste0("Done calculating LOO PRTB score for ", length(de.genes), " genes in ", s, "...\n"))
                 }
 
             }
@@ -420,13 +421,8 @@ RunMixscale = function (object, assay = "PRTB", slot = "scale.data", labels = "g
     wt_PRTB_list = wt_PRTB_list[wt_PRTB_list %in% all_PRTB_list]
     
     # 
-    if(is.null(split.by)) {
-        mat_B = data.frame(cell_label = colnames(object), 
-                           gene = object[[labels]][,1] )
-    } else {
-        mat_B = data.frame(cell_label = colnames(object), 
-                           gene = object[[labels]][,1] )
-    }
+    mat_B = data.frame(cell_label = colnames(object), 
+                       gene = object[[labels]][,1] )
     
     # 
     all_score = data.frame() # to store the scores from each PRTB

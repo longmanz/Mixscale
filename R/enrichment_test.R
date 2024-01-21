@@ -12,39 +12,51 @@ NULL
 #' @export
 #' @param object a seurat object to perform the DE test and the enrichment test
 #' @param plist the pathway gene lists to test the DE genes against
-#' @param labels the metadata column of cell type labels (or other annotations) to loop through
-#' @param slct_labels if users only want to apply the test to a subset of the groups in the 'labels' column, 
-#' they can specify them as a vector using this. 
-#' @param conditions the metadata column of the Identity for ident.1 and ident.2 to run DE test
+#' @param ct.class Regroup cells into a different identity class prior to performing differential expression. 
+#' Default is NULL (so all cells be used simultaneously).
+#' @param slct.ct Subset a particular identity class prior to regrouping. Only relevant if group.by is set.
 #' @param ident.1 Identity class to define markers for; pass an object of class phylo or 'clustertree' to find markers for a node in a cluster tree; passing 'clustertree' requires BuildClusterTree to have been run
 #' @param ident.2 A second identity class for comparison; if NULL, use all other cells for comparison; if an object of class phylo or 'clustertree' is passed to ident.1, must pass a node to find markers for
-#' @return a list of data frames containing the gene set enrichment results for each group in "labels"
+#' @return a list of data frames containing the gene set enrichment results for each group in "group.by"
 #' 
 
-Mixscale_DEenrich <- function(object, 
-                              plist = NULL, 
-                              labels = "cell_type", 
-                              slct_labels = NULL,
-                              conditions = "treatment",
-                              ident.1 = NULL,
-                              ident.2 = NULL, 
-                              direction = c("up", "down", "both"), 
-                              logfc.threshold = 0.25,
-                              p.val.cutoff = 0.05, 
-                              min.pct = 0.1,
-                              assay = NULL, 
-                              ...){
-    slct_celltype = sort(unique(object[[labels]][, 1]))
-    if(!is.null(slct_labels)){
-        slct_celltype = intersect(slct_celltype, slct_labels)
+DEenrich <- function(object, 
+                     plist = NULL, 
+                     ident = NULL, 
+                     ident.1 = NULL,
+                     ident.2 = NULL, 
+                     ct.class = NULL, 
+                     slct.ct = NULL,
+                     direction = c("up", "down", "both"), 
+                     logfc.threshold = 0.25,
+                     p.val.cutoff = 0.05, 
+                     min.pct = 0.1,
+                     assay = NULL, 
+                     ...){
+    
+    slct_celltype = sort(unique(object[[ct.class]][, 1]))
+    if(!is.null(ct.class) & is.null(slct_celltype)){
+        stop("Please check if your ct.class is correctly specified.")
+    }
+    
+    if(!is.null(slct.ct)){
+        slct_celltype = intersect(slct_celltype, slct.ct)
     }
     if(length(slct_celltype) == 0){
-        stop("The provided 'labels' column has 0 levels. Please check if 'labels' and 'slct_labels' are correctly specified")
+        slct_celltype = "con1"
     }
     
     enrich_list = list()
     for(CELLTYPE in slct_celltype){
-        object[["new_ident"]] = paste0(object[[labels]][,1], "_", object[[conditions]][,1])
+        if(!is.null(ident)){
+            Idents(object) = ident
+        }
+        # 
+        if(is.null(ct.class)){
+            object[["new_ident"]] = paste0("con1", "_", Idents(object))
+        } else {
+            object[["new_ident"]] = paste0(object[[ct.class]][,1], "_", Idents(object))
+        }
         ident.1.tmp = paste0(CELLTYPE, "_", ident.1)
         ident.2.tmp = paste0(CELLTYPE, "_", ident.2)
         
@@ -55,6 +67,8 @@ Mixscale_DEenrich <- function(object,
                              ident.2 = ident.2.tmp, 
                              min.pct = min.pct, 
                              logfc.threshold = 0, 
+                             group.by = group.by,
+                             subset.ident = subset.ident,
                              ...)
         
         # get the top DEGs separately for up and down regulated genes 
@@ -91,7 +105,11 @@ Mixscale_DEenrich <- function(object,
         enrich_list[[CELLTYPE]] = rbind(enrich_res_up, enrich_res_down)
     }
     
-    return(enrich_list)
+    if(length(enrich_list) == 1){
+        return(enrich_list[[1]])
+    } else {
+        return(enrich_list)
+    }
 }
 
 

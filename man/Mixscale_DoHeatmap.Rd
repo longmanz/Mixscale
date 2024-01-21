@@ -10,10 +10,12 @@ Mixscale_DoHeatmap(
   slot = "data",
   labels = "gene",
   nt.class.name = "NT",
-  PRTB = NULL,
-  slct_condition = "con1",
-  slct_features = NULL,
-  slct_ident = NULL,
+  slct.ident = NULL,
+  mixscale.score.name = "mixscale_score",
+  features = NULL,
+  group.by = NULL,
+  ct.class = NULL,
+  slct.ct = NULL,
   ...
 )
 }
@@ -29,17 +31,20 @@ gene labels}
 
 \item{nt.class.name}{the classification name of non-targeting gRNA cells}
 
-\item{PRTB}{the gene name of the perturbation target to be plotted}
+\item{slct.ident}{the name of the perturbation target in 'labels' to be plotted.}
 
-\item{slct_condition}{the name of the selected condition (e.g., cell type) to be 
-plotted. If split.by was set to NULL during RunMixscale(), then user should leave it 
-as the default value (i.e., "con1").}
+\item{mixscale.score.name}{Name of mixscale scores to be stored in metadata. Default is "mixscale_score".}
 
-\item{slct_features}{a vector of the names of the selected features (usually some DE 
-genes) to be plotted in the heatmap.}
+\item{features}{A vector of features to plot.}
 
-\item{slct_ident}{if an alternative ident column instead of the "labels" column is desired,
-users can input it here for plotting.}
+\item{group.by}{A vector of variables to group cells by; pass 'ident' to group by cell identity classes.
+Default is the same as 'labels'.}
+
+\item{ct.class}{the metadata colname that stores the cell type (or other conditions) information. 
+If this is set and the correct slct.ct is provided, only cells with the corresponding slct.ct will 
+be plotted. Default is NULL (so cells from all the ct.class will be plotted).}
+
+\item{slct.ct}{a character of the group of cells in ct.class to be plotted. Default is NULL (so cells from all the ct.class will be plotted).}
 }
 \value{
 a ggplot2 object of the single-cell heatmap.

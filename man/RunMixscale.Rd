@@ -83,8 +83,8 @@ only be used when harmonize is TRUE. Default is 0.1.}
 Default is 0.05.}
 }
 \value{
-Returns a Seurat object containing the perturbation scores. It is stored in the Tool Data of the object, not in the 
-meta.data.
+Returns a Seurat object containing the perturbation scores. It is stored in the Tool Data of the object, also 
+the standardized scores are stored in the meta.data (column is specified by new.class.name).
 }
 \description{
 Function to calculate perturbation scores for perturbed and non-perturbed gRNA expressing cells.

@@ -12,7 +12,7 @@ Mixscale_ScatterPlot(
   labels = "gene",
   nt.class.name = "NT",
   split.by = NULL,
-  PRTB = NULL,
+  slct.ident = NULL,
   nbin = 10,
   facet_wrap = c(NULL, "gene", "split.by"),
   facet_scale = c("fixed", "free_y"),
@@ -26,8 +26,7 @@ Mixscale_ScatterPlot(
 
 \item{slot}{the slot name to extract the expression level data from for plotting}
 
-\item{labels}{the column name in the object's meta.data that contains the target
-gene labels}
+\item{labels}{metadata column with target gene labels.}
 
 \item{nt.class.name}{the classification name of non-targeting gRNA cells}
 
@@ -35,8 +34,8 @@ gene labels}
 information. This is meant to be used to account for cases a perturbation is 
 condition/cell type -specific.}
 
-\item{PRTB}{the perturbation target genes to extract for plotting. Multiple values are 
-allowed.}
+\item{slct.ident}{the perturbation target genes to extract for plotting from 'labels'. Multiple values are 
+allowed. Default is NULL (every class will be plotted).}
 
 \item{nbin}{the number of bins to divide the perturbation scores into.}
 

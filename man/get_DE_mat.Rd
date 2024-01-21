@@ -12,7 +12,7 @@ get_DE_mat(
 )
 }
 \arguments{
-\item{de_res}{the DE results produced by Run_wtDE(), which is a list of data frames.}
+\item{de_res}{the DE results produced by Run_wmvRegDE(), which is a list of data frames.}
 
 \item{p_threshold}{the DE P-value threshold to define statistically significant DE genes.}
 
@@ -23,7 +23,7 @@ will be selected as the rows (features). This helps avoid the feature space is d
 that have a huge number of DEGs. The default is 50. Set it to NULL to avoid filtering.}
 }
 \description{
-A function to re-arrange the DE results produced by Run_wtDE() into a list of Z-score matrices. 
+A function to re-arrange the DE results produced by Run_wmvRegDE() into a list of Z-score matrices. 
 Each matrix represents one cell type (if multiple cell types were included), and contains the 
 DE test Z-scores for each valid gene being tested (rows) and each perturbation target (columns).
 }

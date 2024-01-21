@@ -20,50 +20,65 @@ NULL
 #' @param slot Assay data slot to use.
 #' @param labels metadata column with target gene labels.
 #' @param nt.class.name Classification name of non-targeting gRNA cells.
-#' @param PRTB_list provide a vector of PRTBs that the DE tests are restricted 
-#' to. Default is NULL (DE tests will be performed for all available PRTBs).
-#' @param new.class.name Name of mixscape classification to be stored in
-#' metadata.
-#' @param min.de.genes Required number of genes that are differentially
-#' expressed for method to separate perturbed and non-perturbed cells.
-#' @param min.cells Minimum number of cells in target gene class. If fewer than
-#' this many cells are assigned to a target gene class during classification,
-#' all are assigned NP.
+#' @param PRTB_list provide a vector of perturbations that the DE tests are restricted 
+#' to. Default is NULL (DE tests will be performed for all available perturbations).
 #' @param split.by metadata column with experimental condition/cell type
-#' classification information. This is meant to be used to account for cases a
-#' perturbation is condition/cell type -specific.
+#' classification information. This is used to account for cases where 
+#' perturbations are done for multiple condition/cell type. Default is NULL (only one 
+#' cell type).
 #' @param logfc.threshold the log-fold-change threshold to select genes for DE
-#' test. Genes with log-fold-change larger than this value will be selected for DE test. 
+#' test. Genes with log2-fold-change larger than this value will be selected for DE test. 
 #' Note that if split.by is set and more than 1 split.by group exists, this 
 #' logfc.threashold will be applied to each group and if any of them satisfies this criteria, the 
-#' gene will be selected. Default is 0 (no filtering).
-#' @param total_ct_labels metadata column for the total RNA counts of each cell
+#' gene will be selected. Default is 0 (no filtering based on log2-fold-change).
+#' @param min.pct only test genes that are detected in a minimum fraction of min.pct cells in either 
+#' of the two populations. Meant to speed up the function by not testing genes that are very 
+#' infrequently expressed. Default is 0.1. Same as logfc.threshold, if split.by is set and more than 1 split.by 
+#' group exists, thiswill be applied to each group and if any of them satisfies this criteria, the 
+#' gene will be selected.
+#' @param min.cells.group Minimum number of cells in one of the groups
+#' @param total_ct_labels metadata column for the total RNA counts of each cell. The default is 
+#' nCount_RNA, which is the default names used by Seurat package.
+#' @param pseudocount.use Pseudocount to add to averaged expression values when calculating logFC. 1 by default.
+#' @param base The base with respect to which logarithms are computed.
+#' @param full.results A boolen value to indicate if the full DE results should be output. Default is 
+#' FALSE (only the regression coefficients/P-values of the mixscale scores will be output).
 #' 
-#' @return list of DE results 
+#' @return a list of DE results, one for each perturbation
 #' @export
 #' @concept perturbation_scoring
 
-Run_wtDE = function (object, assay = "RNA", slot = "counts", labels = "gene", 
-                      nt.class.name = "NT", verbose = FALSE, 
-                      PRTB_list = NULL,
-                      split.by = NULL,
-                      total_ct_labels = "nCount_RNA",  
-                      logfc.threshold = 0, 
-                      pseudocount.use = 1, 
-                      base = 2,
-                      min.pct = 0.1, 
-                      min.cells = 10) 
+Run_wmvRegDE = function (object, 
+                         assay = "RNA", 
+                         slot = "counts", 
+                         labels = "gene", 
+                         nt.class.name = "NT", 
+                         verbose = FALSE, 
+                         PRTB_list = NULL,
+                         split.by = NULL,
+                         logfc.threshold = 0, 
+                         min.pct = 0.1, 
+                         min.cells.group = 10,
+                         total_ct_labels = "nCount_RNA",  
+                         pseudocount.use = 1, 
+                         base = 2, 
+                         full.results = FALSE) 
 {
     # 
-    print("Running scoring DE test!\n")
+    message("Running Mixscale weighted DE test...")
     
     # check if the required package is installed
     glmGamPoi.installed <- rlang::is_installed(pkg = "glmGamPoi")
     if (!glmGamPoi.installed[1]) {
-        stop("Please install the glmGamPoi package to use Run_wtDE", 
+        stop("Please install the glmGamPoi package to use Run_wmvRegDE", 
              "\nThis can be accomplished with the following command: ", 
              "\n----------------------------------------", "\nBiocManager::install('glmGamPoi')", 
              "\n----------------------------------------", call. = FALSE)
+    }
+    
+    # check if the slot is correctly set to counts
+    if(slot != "counts"){
+        stop("The slot must be set to 'counts'.")
     }
     
     # 
@@ -241,11 +256,11 @@ Run_wtDE = function (object, assay = "RNA", slot = "counts", labels = "gene",
             # overall filtering (including fold-change)
             fc$status = abs(fc$avg_log2FC) >= logfc.threshold & 
                 (fc$pct.1 >= min.pct | fc$pct.2 >= min.pct) & 
-                (fc$min.cell.1 >= min.cells | fc$min.cell.2 >= min.cells)
+                (fc$min.cell.1 >= min.cells.group | fc$min.cell.2 >= min.cells.group)
             
             # filtering on pct and min.cells (genes will be filtered if these two criteria are not met)
             fc$status2 = (fc$pct.1 >= min.pct | fc$pct.2 >= min.pct) & 
-                (fc$min.cell.1 >= min.cells | fc$min.cell.2 >= min.cells)
+                (fc$min.cell.1 >= min.cells.group | fc$min.cell.2 >= min.cells.group)
             
             fc_list[[celltype]] = fc 
             rm(fc)
@@ -262,13 +277,13 @@ Run_wtDE = function (object, assay = "RNA", slot = "counts", labels = "gene",
                 names(idx_list2) = celltype
                 # 
                 fc_mat = data.frame(celltype = fc_list[[celltype]]$avg_log2FC)
-                names(fc_mat) = paste0("fc_", celltype)
+                names(fc_mat) = paste0("log2FC_", celltype)
                 rownames(fc_mat) = rownames(fc_list[[celltype]])
             } else {
                 idx_list[[celltype]] = fc_list[[celltype]]$status
                 idx_list2[[celltype]] = fc_list[[celltype]]$status2
                 
-                fc_mat[[paste0("fc_", celltype)]] = fc_list[[celltype]]$avg_log2FC
+                fc_mat[[paste0("log2FC_", celltype)]] = fc_list[[celltype]]$avg_log2FC
             }
         }
         # count all the columns and get a single index vector
@@ -287,7 +302,7 @@ Run_wtDE = function (object, assay = "RNA", slot = "counts", labels = "gene",
         ######################################################
         
         if(DE_FLAG == "weighted"){
-            print(paste0(PRTB, " is running weighted DE test! "))
+            message(paste0(PRTB, " is running weighted DE test! "))
             
             ######################################################
             # since we will use Leave-one-out to run the DE, we will need some more filterings
@@ -396,7 +411,7 @@ Run_wtDE = function (object, assay = "RNA", slot = "counts", labels = "gene",
             idx_for_DE = c( idx_for_DE, idx_LOO_rm )
             
         } else if (DE_FLAG == "standard"){
-            print(paste0(PRTB, " is running standard DE test! "))
+            message(paste0(PRTB, " is running standard DE test! "))
             
             # 
             if(length(celltype_list) > 1){
@@ -448,9 +463,24 @@ Run_wtDE = function (object, assay = "RNA", slot = "counts", labels = "gene",
         
         # save the DE results for this PRTB to "all_res"
         rownames(res) = res$gene_ID
+        
+        # check if the user wants the full results or not 
+        if(isTRUE(full.results)){
+            # nothing happens
+        } else {
+            idx_colnames1 = grep(pattern = "_weight", 
+                                 x = colnames(res), 
+                                 value = T)
+            idx_colnames2 = grep(pattern = "^fc", 
+                                 x = colnames(res), 
+                                 value = T)
+            res = res[, c("gene_ID", idx_colnames2, idx_colnames1, "DE_method")]
+            res = res[order(res[, tail(idx_colnames1, 1)]), ]
+        }
+        
         all_res[[PRTB]] = res
         
-        print(paste0("DE test for '", PRTB, "' is completed. Number of remaining = ", length(all_PRTB_list) - match(PRTB, all_PRTB_list)))
+        message(paste0("DE test for '", PRTB, "' is completed. Number of remaining groups = ", length(all_PRTB_list) - match(PRTB, all_PRTB_list)))
     }
     
     return(all_res)
@@ -460,13 +490,13 @@ Run_wtDE = function (object, assay = "RNA", slot = "counts", labels = "gene",
 
 #' Rearrange the DE results into a list of Z-score matrices
 #'
-#' A function to re-arrange the DE results produced by Run_wtDE() into a list of Z-score matrices. 
+#' A function to re-arrange the DE results produced by Run_wmvRegDE() into a list of Z-score matrices. 
 #' Each matrix represents one cell type (if multiple cell types were included), and contains the 
 #' DE test Z-scores for each valid gene being tested (rows) and each perturbation target (columns).  
 #' 
 #' @export
 #' 
-#' @param de_res the DE results produced by Run_wtDE(), which is a list of data frames.
+#' @param de_res the DE results produced by Run_wmvRegDE(), which is a list of data frames.
 #' @param p_threshold the DE P-value threshold to define statistically significant DE genes. 
 #' @param fc_threshold the log-fold-change threhsold to define statistically significant DE genes. 
 #' @param num_top_DEG for each perturbation, only the top num_top_DEG DEG within each condition/cell line
@@ -482,8 +512,14 @@ get_DE_mat = function(de_res = NULL,
     PRTB_list = names(de_res)
     
     # and get the names of all the cell types
-    celltype_list = grep("fc_", colnames(de_res[[1]]), value = T)
-    celltype_list = sort(gsub("fc_", "", celltype_list))
+    celltype_list = grep("log2FC_", colnames(de_res[[1]]), value = T)
+    celltype_list = sort(gsub("log2FC_", "", celltype_list))
+    fc_prefix = "log2FC_"
+    if(length(celltype_list) == 0){
+        celltype_list = grep("fc_", colnames(de_res[[1]]), value = T)
+        celltype_list = sort(gsub("fc_", "", celltype_list))
+        fc_prefix = "fc_"
+    }
     
     # now we will extract the genes that meet the p_threshold and fc_threshold criteria
     gene_list = c()
@@ -502,7 +538,7 @@ get_DE_mat = function(de_res = NULL,
             CELLTYPE = celltype_list
             # 
             idx_DE = which( (DE_res[, paste0("p_weight")] <= p_threshold) & 
-                                (abs(DE_res[, paste0("fc_", CELLTYPE)]) >= fc_threshold) )
+                                (abs(DE_res[, paste0(fc_prefix, CELLTYPE)]) >= fc_threshold) )
             
             if(!is.null(num_top_DEG)){
                 if(length(idx_DE) > num_top_DEG){
@@ -515,7 +551,7 @@ get_DE_mat = function(de_res = NULL,
             # for each celltype, get the idx for all the DEGs
             for(CELLTYPE in celltype_list){
                 idx_DE = which( (DE_res[, paste0("p_cell_type", CELLTYPE, ":weight")] <= p_threshold) & 
-                                    (abs(DE_res[, paste0("fc_", CELLTYPE)]) >= fc_threshold) )
+                                    (abs(DE_res[, paste0(fc_prefix, CELLTYPE)]) >= fc_threshold) )
                 
                 if(!is.null(num_top_DEG)){
                     if(length(idx_DE) > num_top_DEG){
@@ -561,11 +597,11 @@ get_DE_mat = function(de_res = NULL,
             if(length(celltype_list) == 1){
                 # 
                 DE_res$z = sign(DE_res[, paste0("beta_weight")]) * sqrt(qchisq(DE_res[, paste0("p_weight")], df = 1, lower.tail = F))
-                logfc_res = DE_res[, c("gene_ID", paste0("fc_", CELLTYPE))]
+                logfc_res = DE_res[, c("gene_ID", paste0(fc_prefix, CELLTYPE))]
             } else {
                 # 
                 DE_res$z = sign(DE_res[, paste0("beta_cell_type", CELLTYPE, ":weight")]) * sqrt(qchisq(DE_res[, paste0("p_cell_type", CELLTYPE, ":weight")], df = 1, lower.tail = F))
-                logfc_res = DE_res[, c("gene_ID", paste0("fc_", CELLTYPE))]
+                logfc_res = DE_res[, c("gene_ID", paste0(fc_prefix, CELLTYPE))]
             }
             #
             DE_res = DE_res[, c("gene_ID", "z")]

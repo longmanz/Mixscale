@@ -139,14 +139,13 @@ Mixscale_RidgePlot = function(object = NULL,
 #' @param object a seurat object returned by RunMixscale()
 #' @param assay the assay name to extract the expression level data from for plotting
 #' @param slot the slot name to extract the expression level data from for plotting
-#' @param labels the column name in the object's meta.data that contains the target
-#' gene labels
 #' @param nt.class.name the classification name of non-targeting gRNA cells
 #' @param split.by metadata column with experimental condition/cell type classification 
 #' information. This is meant to be used to account for cases a perturbation is 
 #' condition/cell type -specific.
-#' @param PRTB the perturbation target genes to extract for plotting. Multiple values are 
-#' allowed.
+#' @param labels metadata column with target gene labels.
+#' @param slct.ident the perturbation target genes to extract for plotting from 'labels'. Multiple values are 
+#' allowed. Default is NULL (every class will be plotted).
 #' @param nbin the number of bins to divide the perturbation scores into. 
 #' @param facet_wrap whether to divide the plot into multiple facets based on either the 
 #' perturbation targets ("gene") or conditions/cell types ("split.by"). Default is NULL, meaning
@@ -159,16 +158,16 @@ Mixscale_RidgePlot = function(object = NULL,
 #' 
 
 Mixscale_ScatterPlot = function(object = NULL, 
-                                 assay = "RNA", 
-                                 slot = "data", 
-                                 labels = "gene", 
-                                 nt.class.name = "NT", 
-                                 split.by = NULL, 
-                                 PRTB = NULL, 
-                                 nbin = 10,
-                                 facet_wrap = c(NULL, "gene", "split.by"),
-                                 facet_scale = c("fixed", "free_y"),
-                                 ...){
+                                assay = "RNA", 
+                                slot = "data", 
+                                labels = "gene", 
+                                nt.class.name = "NT", 
+                                split.by = NULL, 
+                                slct.ident = NULL, 
+                                nbin = 10,
+                                facet_wrap = c(NULL, "gene", "split.by"),
+                                facet_scale = c("fixed", "free_y"),
+                                ...){
     # if the split.by is set, need to extract it 
     if (is.null(x = split.by)) {
         split.by <- splits <- "con1"
@@ -184,6 +183,17 @@ Mixscale_ScatterPlot = function(object = NULL,
     # check if the scores exist
     if(is.null(prtb_score)){
         stop(paste0("It seems the scores are not calculated for this object. Please check!"))
+    }
+    
+    # check what PRTB needs to be plotted:
+    if(is.null(slct.ident)){
+        PRTB = names(prtb_score)
+    } else {
+        PRTB = intersect(slct.ident, names(prtb_score))
+    }
+    
+    if(length(PRTB) == 0){
+        stop("Please check if the slct.ident is correctly specified.")
     }
     
     # 
@@ -247,18 +257,18 @@ Mixscale_ScatterPlot = function(object = NULL,
         ylab("expression levels of target")
     
     # is facet_wrap is set, add it to the ggplot object
-    if(is.null(facet_wrap)){
-        return(p)
-    } else if (facet_wrap == "gene"){
+    if(is.null(facet_wrap) & length(PRTB) > 1){
         return(p + facet_wrap(~ PRTB, scales = facet_scale))
-    } else if (facet_wrap == "split.by"){
+    } else if (facet_wrap == "gene" & length(PRTB) > 1){
+        return(p + facet_wrap(~ PRTB, scales = facet_scale))
+    } else if (facet_wrap == "split.by" & length(splits) > 1){
         return(p + facet_wrap(~ CELLTYPE, scales = facet_scale))
+    } else{
+        return(p)
     }
     
     
 }
-
-
 
 #' Single-cell heatmap for selected DE genes stratified by target expression
 #' 
@@ -278,109 +288,196 @@ Mixscale_ScatterPlot = function(object = NULL,
 #' @param labels the column name in the object's meta.data that contains the target
 #' gene labels
 #' @param nt.class.name the classification name of non-targeting gRNA cells
-#' @param PRTB the gene name of the perturbation target to be plotted
-#' @param slct_condition the name of the selected condition (e.g., cell type) to be 
-#' plotted. If split.by was set to NULL during RunMixscale(), then user should leave it 
-#' as the default value (i.e., "con1").
-#' @param slct_features a vector of the names of the selected features (usually some DE 
-#' genes) to be plotted in the heatmap. 
-#' @param slct_ident if an alternative ident column instead of the "labels" column is desired,
-#' users can input it here for plotting.
+#' @param mixscale.score.name Name of mixscale scores to be stored in metadata. Default is "mixscale_score".
+#' @param features A vector of features to plot. 
+#' @param slct.ident the name of the perturbation target in 'labels' to be plotted. 
+#' @param group.by A vector of variables to group cells by; pass 'ident' to group by cell identity classes.
+#' Default is the same as 'labels'.
+#' @param ct.class the metadata colname that stores the cell type (or other conditions) information. 
+#' If this is set and the correct slct.ct is provided, only cells with the corresponding slct.ct will 
+#' be plotted. Default is NULL (so cells from all the ct.class will be plotted).
+#' @param slct.ct a character of the group of cells in ct.class to be plotted. Default is NULL (so cells from all the ct.class will be plotted).
+#' 
 #' @return a ggplot2 object of the single-cell heatmap.
 #' 
 #' 
 
 Mixscale_DoHeatmap = function(object = NULL, 
-                               assay = "RNA", 
-                               slot = "data",
-                               labels = "gene", 
-                               nt.class.name = "NT", 
-                               PRTB = NULL, 
-                               slct_condition = "con1",
-                               slct_features = NULL,
-                              slct_ident = NULL,
-                               ...){
-    # get the full object of the PRTB scores
-    prtb_score <- Tool(object = object, slot = "RunMixscale")
-    # check if the scores exist
-    if(is.null(prtb_score)){
-        stop(paste0("It seems the scores are not calculated for this object. Please check!"))
+                              assay = "RNA", 
+                              slot = "data",
+                              labels = "gene", 
+                              nt.class.name = "NT", 
+                              slct.ident = NULL, 
+                              mixscale.score.name = "mixscale_score",
+                              features = NULL,
+                              group.by = NULL,
+                              ct.class = NULL,
+                              slct.ct = NULL,
+                              ...){
+    # check if the mixscale.score.name is correctly provided
+    if(length(object[[mixscale.score.name]]) == 0){
+        stop("Please make sure the object has been processed by RunMixscale() and the correct mixscale.score.name is provided.")
+    }
+    # check the group.by
+    if(is.null(group.by)){
+        group.by = labels
+    }
+    # check features
+    if(length(intersect(features, rownames(object))) == 0){
+        stop("Please make sure the correct 'features' is set.")
+        features = intersect(features, rownames(object))
     }
     
-    # get the scores for the selected PRTB and condition
-    scores = prtb_score[[PRTB]][[slct_condition]][, c(1:2)]  # get the column 1 (score) and 2 (label)
-    scores$cell_ID = rownames(scores)
-    
-    # get a subsetted seurat object for the DoHeatmap() function
-    sub_obj = subset(object, cells = scores$cell_ID)
-
-    # add the perturbation score to the meta-data:
-    sub_obj = AddMetaData(sub_obj, metadata = scores)
+    # get the initial list of cells to be plotted
+    cells_idx = which(object[[labels]][, 1] %in% c(nt.class.name, slct.ident))
     
     # 
-    sub_obj$ident_plot2 = as.character(sub_obj[[labels]][, 1])
+    if(!is.null(ct.class)){
+        cells_idx2 = which(object[[ct.class]][, 1] %in% slct.ct)
+        cells_idx = intersect(cells_idx, cells_idx2)
+    }
     
-    #  get the target gene expression level
-    target_expression <- GetAssayData(object = sub_obj, assay = assay, slot = slot)[PRTB, scores$cell_ID]
-    target_expression = target_expression[match(colnames(sub_obj), names(target_expression))]
-
-    idx_0 = which(target_expression == 0) 
-    idx_not0 = which(target_expression != 0) 
+    if(length(cells_idx) == 0){
+        stop("No cells found. Please check if the slct.ident or the slct.ct are correctly specified.")
+    }
     
-    sub_obj$ident_plot2[target_expression == 0 & sub_obj[[labels]][, 1] != nt.class.name] = "expr = 0"
-    sub_obj$ident_plot2[target_expression != 0 & sub_obj[[labels]][, 1] != nt.class.name] = "expr > 0"
+    cells = colnames(object)[cells_idx]
     
-    sub_obj$ident_plot2 = factor(x = as.character(sub_obj$ident_plot2), levels = c(nt.class.name, "expr > 0", "expr = 0"))
-    
-    weight_to_reorder <- sub_obj$pvec
-    ordered.cells <- names(x = weight_to_reorder)[order(weight_to_reorder, decreasing = F)]
-    
-    # scale the expression data
-    sub_obj <- ScaleData(object = sub_obj, features = unique(c(PRTB, slct_features)), assay = assay)
+    # re-order the cells based on their mixscale scores
+    ordered.cells = cells[order(object[[mixscale.score.name]][cells, ], decreasing = F)]
+    object <- ScaleData(object = object, features = features, assay = assay)
     
     ### plot all celltype together
-    if(is.null(slct_ident)){
-        p3 = DoHeatmap(object = sub_obj, features = unique(c(PRTB, slct_features)), label = TRUE, cells = ordered.cells, assay = assay, 
-                       group.by = "ident_plot2") + ggtitle(paste0("Ordered by perturbation score"))
-    } else {
-        p3 = DoHeatmap(object = sub_obj, features = unique(c(PRTB, slct_features)), label = TRUE, cells = ordered.cells, assay = assay, 
-                       group.by = slct_ident) + ggtitle(paste0("Ordered by perturbation score"))
-    }
-
-    return(p3)
+    p = DoHeatmap(object = sub_obj, features = features, label = TRUE, cells = ordered.cells, assay = assay, 
+                  group.by = group.by) 
+    return(p)
 }
 
 
+#  #' Single-cell heatmap for selected DE genes stratified by target expression
+#  #' 
+#  #' This function will generate single-cell expression heatmap for selected DE genes 
+#  #' in cells of the same perturbation target (gRNA). This function is basically a 
+#  #' wrapper function of the Seurat::DoHeatmap(), but with easier usage to select the 
+#  #' cells based on given gRNA identity. Cells will be ordered in each stratification based 
+#  #' on their perturbation scores. 
+#  #' 
+#  #' @export
+#  #' 
+#  #' @import Seurat
+#  #' 
+#  #' @param object a seurat object returned by RunMixscale()
+#  #' @param assay the assay name to extract the expression level data from for plotting
+#  #' @param slot the slot name to extract the expression level data from for plotting
+#  #' @param labels the column name in the object's meta.data that contains the target
+#  #' gene labels
+#  #' @param nt.class.name the classification name of non-targeting gRNA cells
+#  #' @param slct.ident the gene name of the perturbation target to be plotted
+#  #' @param slct_condition the name of the selected condition (e.g., cell type) to be 
+#  #' plotted. If split.by was set to NULL during RunMixscale(), then user should leave it 
+#  #' as the default value (i.e., "con1").
+#  #' @param slct_features a vector of the names of the selected features (usually some DE 
+#  #' genes) to be plotted in the heatmap. 
+#  #' @param slct_ident if an alternative ident column instead of the "labels" column is desired,
+#  #' users can input it here for plotting.
+#  #' @return a ggplot2 object of the single-cell heatmap.
+#  #' 
+#  #' 
 
-#' Multi-way dotplot for multi-cell-line DE results
-#' 
-#' This function will generate a multi-way dotplot if the DE results produces by Run_wtDE() 
-#' and get_DE_mat() contain multiple different cell-lines. The a-axis will be some selected perturbations and 
-#' the y-axis will be some selected DE genes that users want to explore. Within each column, 
-#' multiple dots will be displayed, with size representing the DE test DE Z-score (significance)
-#' and color indicating the cell line identity. It is a good way to explore the consistency and
-#' heterogeneity of DE results across perturbations/cell lines. 
-#' 
-#' @export
-#' 
-#' @importFrom reshape2 melt
-#' @import ggplot2
-#' 
-#' @param name description
-#' 
+#  Mixscale_DoHeatmap_old = function(object = NULL, 
+#                                    assay = "RNA", 
+#                                    slot = "data",
+#                                    labels = "gene", 
+#                                    nt.class.name = "NT", 
+#                                    slct.ident = NULL, 
+#                                    slct_condition = "con1",
+#                                    slct_features = NULL,
+#                                    slct_ident = NULL,
+#                                    ...){
+#      # get the full object of the PRTB scores
+#      prtb_score <- Tool(object = object, slot = "RunMixscale")
+#      # check if the scores exist
+#      if(is.null(prtb_score)){
+#          stop(paste0("It seems the scores are not calculated for this object. Please check!"))
+#      }
+#      
+#      if(!is.null(slct.ident)){
+#          if(intersect())
+#      }
+#      
+#      # get the scores for the selected PRTB and condition
+#      scores = prtb_score[[PRTB]][[slct_condition]][, c(1:2)]  # get the column 1 (score) and 2 (label)
+#      scores$cell_ID = rownames(scores)
+#      
+#      # get a subsetted seurat object for the DoHeatmap() function
+#      sub_obj = subset(object, cells = scores$cell_ID)
+#  
+#      # add the perturbation score to the meta-data:
+#      sub_obj = AddMetaData(sub_obj, metadata = scores)
+#      
+#      # 
+#      sub_obj$ident_plot2 = as.character(sub_obj[[labels]][, 1])
+#      
+#      #  get the target gene expression level
+#      target_expression <- GetAssayData(object = sub_obj, assay = assay, slot = slot)[PRTB, scores$cell_ID]
+#      target_expression = target_expression[match(colnames(sub_obj), names(target_expression))]
+#  
+#      idx_0 = which(target_expression == 0) 
+#      idx_not0 = which(target_expression != 0) 
+#      
+#      sub_obj$ident_plot2[target_expression == 0 & sub_obj[[labels]][, 1] != nt.class.name] = "expr = 0"
+#      sub_obj$ident_plot2[target_expression != 0 & sub_obj[[labels]][, 1] != nt.class.name] = "expr > 0"
+#      
+#      sub_obj$ident_plot2 = factor(x = as.character(sub_obj$ident_plot2), levels = c(nt.class.name, "expr > 0", "expr = 0"))
+#      
+#      weight_to_reorder <- sub_obj$pvec
+#      ordered.cells <- names(x = weight_to_reorder)[order(weight_to_reorder, decreasing = F)]
+#      
+#      # scale the expression data
+#      sub_obj <- ScaleData(object = sub_obj, features = unique(c(PRTB, slct_features)), assay = assay)
+#      
+#      ### plot all celltype together
+#      if(is.null(slct_ident)){
+#          p3 = DoHeatmap(object = sub_obj, features = unique(c(PRTB, slct_features)), label = TRUE, cells = ordered.cells, assay = assay, 
+#                         group.by = "ident_plot2") + ggtitle(paste0("Ordered by perturbation score"))
+#      } else {
+#          p3 = DoHeatmap(object = sub_obj, features = unique(c(PRTB, slct_features)), label = TRUE, cells = ordered.cells, assay = assay, 
+#                         group.by = slct_ident) + ggtitle(paste0("Ordered by perturbation score"))
+#      }
+#  
+#      return(p3)
+#  }
 
-DE_MultiwayPlot = function(DEG_mat = NULL, 
-                           zscore_cap = 10, 
-                           
-                           ...){
-    pruned_DEG_mat = prune_DE_mat(DEG_mat = DEG_mat, 
-                                  zscore_cap = zscore_cap, 
-                                  mask_target = FALSE, 
-                                  p_threshold = 1, 
-                                  )
-    
-    
-}
+
+
+# #' TBD: Multi-way dotplot for multi-cell-line DE results
+# #' 
+# #' This function will generate a multi-way dotplot if the DE results produces by Run_wtDE() 
+# #' and get_DE_mat() contain multiple different cell-lines. The a-axis will be some selected perturbations and 
+# #' the y-axis will be some selected DE genes that users want to explore. Within each column, 
+# #' multiple dots will be displayed, with size representing the DE test DE Z-score (significance)
+# #' and color indicating the cell line identity. It is a good way to explore the consistency and
+# #' heterogeneity of DE results across perturbations/cell lines. 
+# #' 
+# #' 
+# #' @importFrom reshape2 melt
+# #' @import ggplot2
+# #' 
+# #' @param name description
+# #' 
+
+# DE_MultiwayPlot = function(DEG_mat = NULL, 
+#                            zscore_cap = 10, 
+#                            
+#                            ...){
+#     pruned_DEG_mat = prune_DE_mat(DEG_mat = DEG_mat, 
+#                                   zscore_cap = zscore_cap, 
+#                                   mask_target = FALSE, 
+#                                   p_threshold = 1, 
+#                                   )
+#     
+#     
+# }
 
 
 
@@ -654,6 +751,10 @@ DEenrich_DotPlot= function(obj,
                            OR_cutoff = 20,
                            slct_labels = NULL, 
                            plot_title = NULL) {
+    if(is.data.frame(obj)){
+        obj = list(object = obj)
+    }
+    
     # first get the names for all the cell types that need to be plotted
     if(is.null(slct_labels)){
         slct_celltype = names(obj)
