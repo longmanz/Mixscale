@@ -166,7 +166,7 @@ Mixscale_ScatterPlot = function(object = NULL,
                                 slct.ident = NULL, 
                                 nbin = 10,
                                 facet_wrap = c(NULL, "gene", "split.by"),
-                                facet_scale = c("fixed", "free_y"),
+                                facet_scale = "free_y",
                                 ...){
     # if the split.by is set, need to extract it 
     if (is.null(x = split.by)) {
@@ -257,17 +257,15 @@ Mixscale_ScatterPlot = function(object = NULL,
         ylab("expression levels of target")
     
     # is facet_wrap is set, add it to the ggplot object
-    if(is.null(facet_wrap) & length(PRTB) > 1){
+    if(is.null(facet_wrap) ){
         return(p + facet_wrap(~ PRTB, scales = facet_scale))
-    } else if (facet_wrap == "gene" & length(PRTB) > 1){
+    } else if (facet_wrap == "gene" ){
         return(p + facet_wrap(~ PRTB, scales = facet_scale))
-    } else if (facet_wrap == "split.by" & length(splits) > 1){
+    } else if (facet_wrap == "split.by"){
         return(p + facet_wrap(~ CELLTYPE, scales = facet_scale))
     } else{
         return(p)
     }
-    
-    
 }
 
 #' Single-cell heatmap for selected DE genes stratified by target expression

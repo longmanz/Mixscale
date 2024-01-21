@@ -471,11 +471,17 @@ Run_wmvRegDE = function (object,
             idx_colnames1 = grep(pattern = "_weight", 
                                  x = colnames(res), 
                                  value = T)
-            idx_colnames2 = grep(pattern = "^fc", 
+            idx_colnames2 = grep(pattern = "^log2FC", 
                                  x = colnames(res), 
                                  value = T)
             res = res[, c("gene_ID", idx_colnames2, idx_colnames1, "DE_method")]
-            res = res[order(res[, tail(idx_colnames1, 1)]), ]
+            # sort the results based on P and then beta
+            
+            res = res[order(res[, tail(idx_colnames1, 1)], rev(abs(res[, tail(idx_colnames1, 1+length(splits))[1]])) ), ]
+            # 
+            if(length(idx_colnames2) == 1){
+                names(res)[which(names(res) == idx_colnames2)] = "log2FC"
+            }
         }
         
         all_res[[PRTB]] = res
