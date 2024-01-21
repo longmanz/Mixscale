@@ -409,7 +409,9 @@ RunMixscale = function (object, assay = "PRTB", slot = "scale.data", labels = "g
             }
             
         }
-        message(paste0("Done with calculating scores for ", s))
+        if(verbose){
+            message(paste0("Done with calculating scores for ", s))
+        }
     }
     SeuratObject::Tool(object = object) <- gv.list
     

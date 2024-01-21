@@ -472,7 +472,8 @@ Run_wmvRegDE = function (object,
                              x = colnames(res), 
                              value = T)
         # sort the results based on P and then beta
-        res = res[order(res[, tail(idx_colnames1, 1)], rev(abs(res[, tail(idx_colnames1, 1+length(splits))[1]])) ), ]
+        num_ct = length(unique(mat_B$cell_type))
+        res = res[order(res[, tail(idx_colnames1, 1)], rev(abs(res[, tail(idx_colnames1, 1+length(num_ct))[1]])) ), ]
         # 
         if(length(idx_colnames2) == 1){
             names(res)[which(names(res) == idx_colnames2)] = "log2FC"
