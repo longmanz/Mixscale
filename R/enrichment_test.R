@@ -67,8 +67,6 @@ DEenrich <- function(object,
                              ident.2 = ident.2.tmp, 
                              min.pct = min.pct, 
                              logfc.threshold = 0, 
-                             group.by = group.by,
-                             subset.ident = subset.ident,
                              ...)
         
         # get the top DEGs separately for up and down regulated genes 
@@ -86,7 +84,7 @@ DEenrich <- function(object,
             enrich_res_down$num_DEG = length(downDEG)
             enrich_res_down$direction_DEG = "downDEG"
             enrich_res_down = enrich_res_down[order(enrich_res_down$Pval), ]
-            
+            enrich_res_down$slct.ct = CELLTYPE
         }
 
         # 
@@ -99,6 +97,7 @@ DEenrich <- function(object,
             enrich_res_up$num_DEG = length(upDEG)
             enrich_res_up$direction_DEG = "upDEG"
             enrich_res_up = enrich_res_up[order(enrich_res_up$Pval), ]
+            enrich_res_up$slct.ct = CELLTYPE
         }
         
         # save the results to the list

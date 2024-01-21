@@ -311,6 +311,7 @@ Mixscale_DoHeatmap = function(object = NULL,
                               group.by = NULL,
                               ct.class = NULL,
                               slct.ct = NULL,
+                              max.num.cell = 300,
                               ...){
     # check if the mixscale.score.name is correctly provided
     if(length(object[[mixscale.score.name]]) == 0){
@@ -327,13 +328,22 @@ Mixscale_DoHeatmap = function(object = NULL,
     }
     
     # get the initial list of cells to be plotted
-    cells_idx = which(object[[labels]][, 1] %in% c(nt.class.name, slct.ident))
-    
+    cells_idx_nt = which(object[[labels]][, 1] %in% nt.class.name)
+    cells_idx_target = which(object[[labels]][, 1] %in% slct.ident)
     # 
     if(!is.null(ct.class)){
         cells_idx2 = which(object[[ct.class]][, 1] %in% slct.ct)
-        cells_idx = intersect(cells_idx, cells_idx2)
+        cells_idx_nt = intersect(cells_idx2, cells_idx_nt)
+        cells_idx_target = intersect(cells_idx2, cells_idx_target)
     }
+    # 
+    if(length(cells_idx_nt) > max.num.cell){
+        cells_idx_nt = sample(cells_idx_nt, max.num.cell)
+    }
+    if(length(cells_idx_target) > max.num.cell){
+        cells_idx_target = sample(cells_idx_target, max.num.cell)
+    }
+    cells_idx = c(cells_idx_target, cells_idx_nt)
     
     if(length(cells_idx) == 0){
         stop("No cells found. Please check if the slct.ident or the slct.ct are correctly specified.")
@@ -346,8 +356,8 @@ Mixscale_DoHeatmap = function(object = NULL,
     object <- ScaleData(object = object, features = features, assay = assay)
     
     ### plot all celltype together
-    p = DoHeatmap(object = sub_obj, features = features, label = TRUE, cells = ordered.cells, assay = assay, 
-                  group.by = group.by) 
+    p = DoHeatmap(object = object, features = features, label = TRUE, cells = ordered.cells, assay = assay, 
+                  group.by = group.by, ...) 
     return(p)
 }
 

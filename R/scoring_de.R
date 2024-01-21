@@ -471,20 +471,21 @@ Run_wmvRegDE = function (object,
         idx_colnames2 = grep(pattern = "^log2FC", 
                              x = colnames(res), 
                              value = T)
-        # sort the results based on P and then beta
+        # sort the results based on P 
         num_ct = length(unique(mat_B$cell_type))
-        res = res[order(res[, tail(idx_colnames1, 1)], rev(abs(res[, tail(idx_colnames1, 1+length(num_ct))[1]])) ), ]
-        # 
-        if(length(idx_colnames2) == 1){
-            names(res)[which(names(res) == idx_colnames2)] = "log2FC"
-        }
-        
+        res = res[order(res[, tail(idx_colnames1, 1)] ), ]
+
         if(isTRUE(full.results)){
             # nothing happens
         } else {
             res = res[, c("gene_ID", idx_colnames2, idx_colnames1, "DE_method")]
         }
         
+        # 
+        if(length(idx_colnames2) == 1){
+            names(res)[which(names(res) == idx_colnames2)] = "log2FC"
+        }
+        # 
         all_res[[PRTB]] = res
         
         message(paste0("DE test for '", PRTB, "' is completed. Number of remaining groups = ", length(all_PRTB_list) - match(PRTB, all_PRTB_list)))
