@@ -468,11 +468,9 @@ Run_wmvRegDE = function (object,
         idx_colnames1 = grep(pattern = "weight", 
                              x = colnames(res), 
                              value = T)
-        print(idx_colnames1)
         idx_colnames2 = grep(pattern = "^log2FC", 
                              x = colnames(res), 
                              value = T)
-        print(idx_colnames2)
         # sort the results based on P 
         num_ct = length(unique(mat_B$cell_type))
         res = res[order(res[, tail(idx_colnames1, 1)] ), ]
