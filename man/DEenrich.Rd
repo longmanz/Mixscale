@@ -10,7 +10,7 @@ DEenrich(
   ident = NULL,
   ident.1 = NULL,
   ident.2 = NULL,
-  ct.class = NULL,
+  split.by = NULL,
   slct.ct = NULL,
   direction = c("up", "down", "both"),
   logfc.threshold = 0.25,
@@ -29,7 +29,7 @@ DEenrich(
 
 \item{ident.2}{A second identity class for comparison; if NULL, use all other cells for comparison; if an object of class phylo or 'clustertree' is passed to ident.1, must pass a node to find markers for}
 
-\item{ct.class}{Regroup cells into a different identity class prior to performing differential expression. 
+\item{split.by}{Regroup cells into a different identity class prior to performing differential expression. 
 Default is NULL (so all cells be used simultaneously).}
 
 \item{slct.ct}{Subset a particular identity class prior to regrouping. Only relevant if group.by is set.}

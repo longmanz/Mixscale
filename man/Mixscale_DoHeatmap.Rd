@@ -16,6 +16,7 @@ Mixscale_DoHeatmap(
   group.by = NULL,
   ct.class = NULL,
   slct.ct = NULL,
+  max.num.cell = 300,
   ...
 )
 }

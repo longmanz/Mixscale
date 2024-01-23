@@ -12,7 +12,7 @@ NULL
 #' @export
 #' @param object a seurat object to perform the DE test and the enrichment test
 #' @param plist the pathway gene lists to test the DE genes against
-#' @param ct.class Regroup cells into a different identity class prior to performing differential expression. 
+#' @param split.by Regroup cells into a different identity class prior to performing differential expression. 
 #' Default is NULL (so all cells be used simultaneously).
 #' @param slct.ct Subset a particular identity class prior to regrouping. Only relevant if group.by is set.
 #' @param ident.1 Identity class to define markers for; pass an object of class phylo or 'clustertree' to find markers for a node in a cluster tree; passing 'clustertree' requires BuildClusterTree to have been run
@@ -25,7 +25,7 @@ DEenrich <- function(object,
                      ident = NULL, 
                      ident.1 = NULL,
                      ident.2 = NULL, 
-                     ct.class = NULL, 
+                     split.by = NULL, 
                      slct.ct = NULL,
                      direction = c("up", "down", "both"), 
                      logfc.threshold = 0.25,
@@ -34,9 +34,9 @@ DEenrich <- function(object,
                      assay = NULL, 
                      ...){
     
-    slct_celltype = sort(unique(object[[ct.class]][, 1]))
-    if(!is.null(ct.class) & is.null(slct_celltype)){
-        stop("Please check if your ct.class is correctly specified.")
+    slct_celltype = sort(unique(object[[split.by]][, 1]))
+    if(!is.null(split.by) & is.null(slct_celltype)){
+        stop("Please check if your split.by is correctly specified.")
     }
     
     if(!is.null(slct.ct)){
@@ -52,10 +52,10 @@ DEenrich <- function(object,
             Idents(object) = ident
         }
         # 
-        if(is.null(ct.class)){
+        if(is.null(split.by)){
             object[["new_ident"]] = paste0("con1", "_", Idents(object))
         } else {
-            object[["new_ident"]] = paste0(object[[ct.class]][,1], "_", Idents(object))
+            object[["new_ident"]] = paste0(object[[split.by]][,1], "_", Idents(object))
         }
         ident.1.tmp = paste0(CELLTYPE, "_", ident.1)
         ident.2.tmp = paste0(CELLTYPE, "_", ident.2)

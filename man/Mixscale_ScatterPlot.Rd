@@ -15,7 +15,7 @@ Mixscale_ScatterPlot(
   slct.ident = NULL,
   nbin = 10,
   facet_wrap = c(NULL, "gene", "split.by"),
-  facet_scale = c("fixed", "free_y"),
+  facet_scale = "free_y",
   ...
 )
 }
