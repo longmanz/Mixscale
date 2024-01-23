@@ -11,7 +11,7 @@
 
 <meta name="author" content="Longda Jiang" />
 
-<meta name="date" content="2024-01-23" />
+<meta name="date" content="2024-01-16" />
 
 <title>Using Mixscale to analyze Perturb-seq data</title>
 
@@ -353,7 +353,7 @@ display: none;
 <h1 class="title toc-ignore">Using Mixscale to analyze Perturb-seq
 data</h1>
 <h4 class="author">Longda Jiang</h4>
-<h4 class="date">2024-01-23</h4>
+<h4 class="date">2024-01-16</h4>
 
 </div>
 
@@ -496,14 +496,10 @@ seurat_obj &lt;- CalcPerturbSig(
     reduction = &quot;pca&quot;, 
     ndims = 40, 
     num.neighbors = 20, 
-    new.assay.name = &quot;PRTB&quot;, 
-    split.by = NULL)  # to specify the metadata column if multiple biological contexts (e.g., cell lines) exist</code></pre>
+    new.assay.name = &quot;PRTB&quot;)</code></pre>
 <p>We will now compute the Mixscale scores for each cell in every
 perturbation group. The standardized Mixscale scores will be saved in
-the metadata under the column named “mixscale_score”. Note that if
-multiple biological contexts (e.g., cell lines) exist, we can use the
-‘split.by’ to specify the corresponding metadata column (in this example
-we only have one cell line).</p>
+the metadata under the column named “mixscale_score”.</p>
 <pre class="r"><code># Mixscale
 seurat_obj = RunMixscale(
     object = seurat_obj, 
@@ -515,10 +511,7 @@ seurat_obj = RunMixscale(
     logfc.threshold = 0.2,
     de.assay = &quot;RNA&quot;,
     max.de.genes = 100, 
-    new.class.name = &quot;mixscale_score&quot;, 
-    fine.mode = F, 
-    verbose = F, 
-    split.by = NULL)</code></pre>
+    new.class.name = &quot;mixscale_score&quot;, fine.mode = F, verbose = F)</code></pre>
 </div>
 <div id="visualizations-for-the-scores" class="section level3">
 <h3>2. Visualizations for the scores</h3>
@@ -545,17 +538,12 @@ statistical power of DE analysis by using them as a “weights” in the
 regression model. Briefly speaking, instead of coding the NT cells as 0
 and the targeted cells as 1, we used the standardized scores to code the
 targeted cells in the regression, so that cells with stronger
-perturbation strength will have higher “weights” and vice versa. Similar
-as above, if multiple biological contexts (e.g., cell lines) exist, we
-can use the ‘split.by’ to specify the corresponding metadata column, and
-the DE tests will be performed in a multi-variate manner. Cell line
-specific P-values will be reported separately in the final output.</p>
+perturbation strength will have higher “weights” and vice versa.</p>
 <pre class="r"><code># run score-based weighted DE test for 12 selected perturbations. It will return a list of data frames (one for each perturbation)
 de_res = Run_wmvRegDE(object = seurat_obj, assay = &quot;RNA&quot;, slot = &quot;counts&quot;,
                       labels = &quot;gene&quot;, nt.class.name = &quot;neg&quot;, 
                       PRTB_list = c(&quot;GATA1&quot;, &quot;GINS1&quot;, &quot;MTOR&quot;),
-                      logfc.threshold = 0.2, 
-                      split.by = NULL)
+                      logfc.threshold = 0.2)
 
 # have a quick look at the DE results
 head(de_res[[1]])</code></pre>
@@ -625,10 +613,7 @@ exclusive_plist = readRDS(&quot;Pathway_Exclusive_genelist.rds&quot;)</code></pr
 IFNB-stimulated cells in each cell types in the ifnb dataset. Then, we
 will perform Fisher enrichment tests for the DE genes from each of the
 cell types, testing them against the pathway gene lists we just load.
-These two steps are merged by a wrapper function. During the DEenrich()
-process, if users wish to conduct the DE tests for each cell type
-individually, they can use the ‘split.by’ to specify the corresponding
-metadata column.</p>
+These two steps are merged by a wrapper function.</p>
 <pre class="r"><code># Normalize the counts 
 ifnb = NormalizeData(ifnb)
 
@@ -639,7 +624,7 @@ res = DEenrich(object = ifnb,
                ident = &quot;stim&quot;,
                ident.1 = &quot;STIM&quot;,
                ident.2 = &quot;CTRL&quot;, 
-               split.by = &quot;seurat_annotations&quot;, 
+               ct.class = &quot;seurat_annotations&quot;, 
                direction = &quot;up&quot;, 
                logfc.threshold = 0.2,
                p.val.cutoff = 0.05, 
@@ -679,7 +664,8 @@ other pathway (For a detailed explanation, please refer to our <a href="not_yet_
 exclusive gene lists enhances our ability to accurately distinguish
 activations among closely associated pathways.</p>
 <pre class="r"><code># only extract the exclusive gene lists that are relevant to IFNB pathway
-exclusive_plist = exclusive_plist[grep(pattern = &quot;IFNB&quot;, names(exclusive_plist))]
+exclusive_plist = exclusive_plist[c(&quot;IFNG_REMOVE_IFNB&quot;, &quot;IFNB_REMOVE_IFNG&quot;, 
+                                    &quot;IFNB_REMOVE_TNFA&quot;, &quot;TNFA_REMOVE_IFNB&quot;)]
 
 # A wrapper function to perform both DE and enrichment test
 res_exclusive = DEenrich(object = ifnb, 
@@ -687,7 +673,7 @@ res_exclusive = DEenrich(object = ifnb,
                          ident = &quot;stim&quot;,
                          ident.1 = &quot;STIM&quot;,
                          ident.2 = &quot;CTRL&quot;, 
-                         split.by = &quot;seurat_annotations&quot;, 
+                         ct.class = &quot;seurat_annotations&quot;, 
                          direction = &quot;up&quot;, 
                          logfc.threshold = 0.2,
                          p.val.cutoff = 0.05, 
