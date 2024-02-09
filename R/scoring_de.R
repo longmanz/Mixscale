@@ -307,8 +307,13 @@ Run_wmvRegDE = function (object,
             ######################################################
             # since we will use Leave-one-out to run the DE, we will need some more filterings
             de_gene_to_rm = gsub(pattern = "weight_", replacement = "", x = grep(pattern = "weight_", x = colnames(mat_all), value = T))
-            de_gene_to_rm = unique(c(PRTB, de_gene_to_rm) )
             
+            if(PRTB %in% row.names(object)){
+                de_gene_to_rm = unique(c(PRTB, de_gene_to_rm) )
+            } else {
+                de_gene_to_rm = unique(de_gene_to_rm)
+            }
+             
             # this is the index for genes using LOO DE (see below for the 2nd DE step)
             idx_LOO_rm = which(row.names(object) %in% de_gene_to_rm)
             # this is the filtered index for genes using standard DE (the 1st DE step)
