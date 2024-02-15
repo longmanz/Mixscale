@@ -372,9 +372,9 @@ RunMixscale = function (object, assay = "PRTB", slot = "scale.data", labels = "g
                 
                 # create a list to store the PRTB score
                 gv <- as.data.frame(x = pvec)
-                gv[, labels] <- nt.class.name
+                gv[, "gene"] <- nt.class.name
                 gv[intersect(x = rownames(x = gv), y = guide.cells), 
-                   labels] <- gene
+                   "gene"] <- gene
                 gv.list[[gene]][[s]] <- gv
                 
                 # the LOOv2 weights
@@ -434,6 +434,7 @@ RunMixscale = function (object, assay = "PRTB", slot = "scale.data", labels = "g
         if(PRTB %in% wt_PRTB_list){
             celltype_list = names(gv.list[[PRTB]])
             for(celltype in celltype_list){
+                # print(gv.list[[PRTB]][[celltype]])
                 tmp = gv.list[[PRTB]][[celltype]][, c("pvec", "gene"), drop = FALSE]
 
                 # get the idx for NT cells and PRTBed cells
