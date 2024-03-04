@@ -415,6 +415,11 @@ RunMixscale = function (object, assay = "PRTB", slot = "scale.data", labels = "g
     }
     SeuratObject::Tool(object = object) <- gv.list
     
+    # check if gv.list is empty. 
+    if(length(gv.list) == 0){
+        warning("Failed to calculate Mixscale scores for any group. \nThis is probably due to insufficient response to perturbation.\nYou may consider lowering the logfc.threshold or min.de.genes when running this function.")
+    }
+    
     # added Jan 16: calculate the standardized scores and append them to the meta-data
     # get the list of PRTBs 
     wt_PRTB_list = sort(names(gv.list))
@@ -461,7 +466,7 @@ RunMixscale = function (object, assay = "PRTB", slot = "scale.data", labels = "g
                 rm(tmp)
             }
         } else {
-            celltype_list = names(gv.list[[1]])
+            # celltype_list = names(gv.list[[1]])
             # 
             tmp = mat_B[mat_B$gene %in% c(PRTB, nt.class.name), ]
             tmp$weight = 0

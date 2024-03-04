@@ -9,7 +9,6 @@ Mixscale_ScatterPlot(
   object = NULL,
   assay = "RNA",
   slot = "data",
-  labels = "gene",
   nt.class.name = "NT",
   split.by = NULL,
   slct.ident = NULL,
@@ -25,8 +24,6 @@ Mixscale_ScatterPlot(
 \item{assay}{the assay name to extract the expression level data from for plotting}
 
 \item{slot}{the slot name to extract the expression level data from for plotting}
-
-\item{labels}{metadata column with target gene labels.}
 
 \item{nt.class.name}{the classification name of non-targeting gRNA cells}
 

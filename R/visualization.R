@@ -143,7 +143,6 @@ Mixscale_RidgePlot = function(object = NULL,
 #' @param split.by metadata column with experimental condition/cell type classification 
 #' information. This is meant to be used to account for cases a perturbation is 
 #' condition/cell type -specific.
-#' @param labels metadata column with target gene labels.
 #' @param slct.ident the perturbation target genes to extract for plotting from 'labels'. Multiple values are 
 #' allowed. Default is NULL (every class will be plotted).
 #' @param nbin the number of bins to divide the perturbation scores into. 
@@ -160,7 +159,7 @@ Mixscale_RidgePlot = function(object = NULL,
 Mixscale_ScatterPlot = function(object = NULL, 
                                 assay = "RNA", 
                                 slot = "data", 
-                                labels = "gene", 
+                                # labels = "gene", 
                                 nt.class.name = "NT", 
                                 split.by = NULL, 
                                 slct.ident = NULL, 
@@ -217,10 +216,12 @@ Mixscale_ScatterPlot = function(object = NULL,
             combine_dat = merge(scores, target_expression, by = "cell_ID", all.x = T)
             
             # we will keep a record of the average log(expression-level) of the target in the NT cells 
-            mean_log_exp_NT = mean(combine_dat[combine_dat[[labels]] == nt.class.name, "target_expression"])
+            # mean_log_exp_NT = mean(combine_dat[combine_dat[[labels]] == nt.class.name, "target_expression"])
+            mean_log_exp_NT = mean(combine_dat[combine_dat[["gene"]] == nt.class.name, "target_expression"])
             
             # only focus on PRTB cells and remove NT cell
-            combine_dat = combine_dat[combine_dat[[labels]] != nt.class.name, ]
+            # combine_dat = combine_dat[combine_dat[[labels]] != nt.class.name, ]
+            combine_dat = combine_dat[combine_dat[["gene"]] != nt.class.name, ]
             
             # calculate the cutoff for each bin of the scores
             bin_cutoff = quantile(combine_dat$pvec, probs = seq(0, 1, 1/nbin))
