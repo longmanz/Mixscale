@@ -15,3 +15,8 @@ You can easily install the package by the following command:
 ```
 install_github("longmanz/Mixscale")
 ```
+
+## Reference
+Our paper is accessible at https://www.biorxiv.org/content/10.1101/2024.01.29.576933v2 .
+If you want to access the dataset generated in our paper, you can find it at https://zenodo.org/records/10520190 .
+
