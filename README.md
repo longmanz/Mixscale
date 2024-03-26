@@ -17,6 +17,6 @@ install_github("longmanz/Mixscale")
 ```
 
 ## Other resources
-Our paper is accessible at https://www.biorxiv.org/content/10.1101/2024.01.29.576933v2 .\
-If you want to access the data generated in our paper, you can find it at https://zenodo.org/records/10520190 .
+Our preprint is available at https://www.biorxiv.org/content/10.1101/2024.01.29.576933v2 .\
+If you want to access the data generated in our paper (including the pathway gene signatures), you can download them at https://zenodo.org/records/10520190 .
 
