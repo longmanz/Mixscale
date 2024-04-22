@@ -247,8 +247,10 @@ Run_wmvRegDE = function (object,
                                                           mat_all$gene != nt.class.name], colnames(object))
             # get the fold-change and min.pct and min.cell
             fc = FoldChange_new(obj = GetAssayData(object = object, slot = "data"),
-                                cells.1 = colnames(object)[idx_NT_celltype],
-                                cells.2 = colnames(object)[idx_P_celltype],
+                                # cells.1 = colnames(object)[idx_NT_celltype],
+                                # cells.2 = colnames(object)[idx_P_celltype],
+                                cells.1 = colnames(object)[idx_P_celltype],
+                                cells.2 = colnames(object)[idx_NT_celltype],
                                 # mean.fxn = function(x) log(x = Matrix::rowMeans(x = expm1(x = x)) + pseudocount.use, base = base), # old version in seurat v4
                                 mean.fxn = function(x) log(x = (rowSums(x = expm1(x = x)) + pseudocount.use)/NCOL(x), base = base),
                                 fc.name = "avg_log2FC",

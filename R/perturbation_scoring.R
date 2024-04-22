@@ -68,13 +68,18 @@ RunMixscale = function (object, assay = "PRTB", slot = "scale.data", labels = "g
     message("Calculating Mixscale scores ...")
     
     assay <- assay %||% DefaultAssay(object = object)
-    if(!assay %in% names(object@assays)){
+    if (!assay %in% names(object@assays)){
         stop(paste0("The 'assay' being specified does not exist! Please check. Have you run CalcPerturbSig() yet?"))
     }
     
     if (is.null(x = labels)) {
         stop("Please specify target gene class metadata name")
     }
+    
+    if (min.de.genes <= 1) {
+        warning("The min.de.genes should be larger than 1!")
+    } 
+    
     prtb_markers <- list()
     prtb_markers2 <- list()
     object[[new.class.name]] <- object[[labels]]
