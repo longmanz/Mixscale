@@ -502,6 +502,318 @@ Run_wmvRegDE = function (object,
 }
 
 
+#' standard unweighted DE test
+#'
+#' A function to perform differential expression (DE) tests without weighting from the. 
+#' It is a standard multivariate negative binomial based model.
+#'
+#' @inheritParams Seurat::FindMarkers
+#' @import Seurat
+#' @import SeuratObject
+#' @import glmGamPoi
+#' @importFrom Matrix rowMeans
+#' 
+#' @param object An object of class Seurat.
+#' @param assay Assay to use for mixscape classification.
+#' @param slot Assay data slot to use.
+#' @param labels metadata column with target gene labels.
+#' @param nt.class.name Classification name of non-targeting gRNA cells.
+#' @param PRTB_list provide a vector of perturbations that the DE tests are restricted 
+#' to. Default is NULL (DE tests will be performed for all available perturbations).
+#' @param split.by metadata column with experimental condition/cell type
+#' classification information. This is used to account for cases where 
+#' perturbations are done for multiple condition/cell type. Default is NULL (only one 
+#' cell type).
+#' @param logfc.threshold the log-fold-change threshold to select genes for DE
+#' test. Genes with log2-fold-change larger than this value will be selected for DE test. 
+#' Note that if split.by is set and more than 1 split.by group exists, this 
+#' logfc.threashold will be applied to each group and if any of them satisfies this criteria, the 
+#' gene will be selected. Default is 0 (no filtering based on log2-fold-change).
+#' @param min.pct only test genes that are detected in a minimum fraction of min.pct cells in either 
+#' of the two populations. Meant to speed up the function by not testing genes that are very 
+#' infrequently expressed. Default is 0.1. Same as logfc.threshold, if split.by is set and more than 1 split.by 
+#' group exists, thiswill be applied to each group and if any of them satisfies this criteria, the 
+#' gene will be selected.
+#' @param min.cells.group Minimum number of cells in one of the groups
+#' @param total_ct_labels metadata column for the total RNA counts of each cell. The default is 
+#' nCount_RNA, which is the default names used by Seurat package.
+#' @param pseudocount.use Pseudocount to add to averaged expression values when calculating logFC. 1 by default.
+#' @param base The base with respect to which logarithms are computed.
+#' @param full.results A boolen value to indicate if the full DE results should be output. Default is 
+#' FALSE (only the regression coefficients/P-values of the mixscale scores will be output).
+#' 
+#' @return a list of DE results, one for each perturbation
+#' @export
+#' @concept perturbation_scoring
+
+Run_stdDE = function (object, 
+                      assay = "RNA", 
+                      slot = "counts", 
+                      labels = "gene", 
+                      nt.class.name = "NT", 
+                      verbose = FALSE, 
+                      PRTB_list = NULL,
+                      split.by = NULL,
+                      logfc.threshold = 0, 
+                      min.pct = 0.1, 
+                      min.cells.group = 10,
+                      total_ct_labels = "nCount_RNA",  
+                      pseudocount.use = 1, 
+                      base = 2, 
+                      full.results = FALSE) 
+{
+    # 
+    message("Running standard negative binomial DE test...")
+    
+    # check if the required package is installed
+    glmGamPoi.installed <- rlang::is_installed(pkg = "glmGamPoi")
+    if (!glmGamPoi.installed[1]) {
+        stop("Please install the glmGamPoi package to use Run_wmvRegDE", 
+             "\nThis can be accomplished with the following command: ", 
+             "\n----------------------------------------", "\nBiocManager::install('glmGamPoi')", 
+             "\n----------------------------------------", call. = FALSE)
+    }
+    
+    # check if the slot is correctly set to counts
+    if(slot != "counts"){
+        stop("The slot must be set to 'counts'.")
+    }
+    
+    # 
+    assay <- assay %||% DefaultAssay(object = object)
+    if (is.null(x = labels)) {
+        stop("Please specify target gene class metadata name")
+    }
+    
+    # get the full list of PRTBs 
+    all_PRTB_list = sort(unique(object[[labels]][,1]))
+    all_PRTB_list = all_PRTB_list[all_PRTB_list != nt.class.name]
+    DefaultAssay(object) = "RNA"
+    
+    if(!is.null(PRTB_list)){
+        all_PRTB_list = intersect(all_PRTB_list, PRTB_list)
+        # check if there is any PRTB left for DE test
+        if(length(all_PRTB_list) == 0){
+            stop("There is no perturbation left for DE tests. Please check the PRTB_list you provided.")
+        }
+    }
+    
+    # get the overall covariate matrix from the meta.data
+    if(is.null(split.by)) {
+        mat_B = data.frame(cell_label = colnames(object), 
+                           nCount_RNA = object[[total_ct_labels]][,1], 
+                           cell_type = as.factor("con1"), 
+                           gene = object[[labels]][,1] )
+    } else {
+        mat_B = data.frame(cell_label = colnames(object), 
+                           nCount_RNA = object[[total_ct_labels]][,1], 
+                           cell_type = as.factor(object[[split.by]][,1]), 
+                           gene = object[[labels]][,1] )
+    }
+    
+    # the list to store all the DE results for every PRTB
+    all_res = list()
+    
+    # perform scoring DE test for each PRTB
+    for(PRTB in all_PRTB_list){
+        # first we need to extract the perturbation score for this PRTB (if it has the scores)
+        mat_A = data.frame()
+        
+        tmp = mat_B[mat_B$gene %in% c(PRTB, nt.class.name), ]
+        tmp$weight = 0
+        tmp[tmp$gene == PRTB, "weight"] = 1
+        
+        mat_all = tmp 
+        rm(tmp)
+        mat_all$log_ct = log10(mat_all$nCount_RNA)
+        mat_all = mat_all[order(mat_all$weight), ]
+        rownames(mat_all) = 1:nrow(mat_all)
+        
+        # DE Flag:
+        DE_FLAG = "standard"
+        
+        # 
+        if(is.null(split.by)){
+            celltype_list = "con1"
+        } else {
+            celltype_list = sort(unique(object[[split.by]][,1]))
+        }
+        
+        ##############################################
+        # get idx for the cells of this PRTB
+        idx = match(mat_all$cell_label, colnames(object))
+        
+        # idx_NT = match(mat_all$cell_label[mat_all$gene == "NT"], colnames(count_data2))
+        # idx_P = match(mat_all$cell_label[mat_all$gene != "NT"], colnames(count_data2))
+        
+        count_data2 = GetAssayData(object = object[['RNA']], slot = "counts")[, idx]
+        # count_data_std2 = GetAssayData(object = object[['RNA']], slot = "data")[, idx]
+        
+        # do not do fold-change check, only do var and min.pct check
+        # idx_for_DE = which(apply(count_data_std2, MARGIN = 1, FUN = get_idx, idx_P = idx_P, idx_NT = idx_NT, logfc.threshold = logfc.threshold, norm.method = 'log.norm'))
+        # overall_FC = FoldChange_new(object = GetAssayData(object = object, slot = "data"),
+        #                                 cells.1 = colnames(object)[idx_NT],
+        #                                 cells.2 = colnames(object)[idx_P],
+        #                                 mean.fxn = function(x) log(x = rowMeans(x = expm1(x = x)) + pseudocount.use, base = base),
+        #                                 fc.name = "avg_log2FC",
+        #                                 features = rownames(x = object) ) 
+        # 
+        # idx_for_DE = (overall_FC$avg_log2FC != 0) & 
+        #     (overall_FC$pct.1 >= min.pct | overall_FC$pct.2 >= min.pct) & 
+        #     (overall_FC$min.cell.1 >= min.cells | overall_FC$min.cell.2 >= min.cells)
+        
+        # here we will calculate the logfc within each cell type. 
+        fc_list = list()
+        for( idx_i in 1:(length(celltype_list)) ){
+            celltype = levels(mat_all$cell_type)[idx_i]
+            # get the indices
+            idx_NT_celltype = match(mat_all$cell_label[mat_all$cell_type == celltype & 
+                                                           mat_all$gene == nt.class.name], colnames(object))
+            idx_P_celltype = match(mat_all$cell_label[mat_all$cell_type == celltype & 
+                                                          mat_all$gene != nt.class.name], colnames(object))
+            # get the fold-change and min.pct and min.cell
+            fc = FoldChange_new(obj = GetAssayData(object = object, slot = "data"),
+                                # cells.1 = colnames(object)[idx_NT_celltype],
+                                # cells.2 = colnames(object)[idx_P_celltype],
+                                cells.1 = colnames(object)[idx_P_celltype],
+                                cells.2 = colnames(object)[idx_NT_celltype],
+                                # mean.fxn = function(x) log(x = Matrix::rowMeans(x = expm1(x = x)) + pseudocount.use, base = base), # old version in seurat v4
+                                mean.fxn = function(x) log(x = (rowSums(x = expm1(x = x)) + pseudocount.use)/NCOL(x), base = base),
+                                fc.name = "avg_log2FC",
+                                features = rownames(x = object) ) 
+            # overall filtering (including fold-change)
+            fc$status = abs(fc$avg_log2FC) >= logfc.threshold & 
+                (fc$pct.1 >= min.pct | fc$pct.2 >= min.pct) & 
+                (fc$min.cell.1 >= min.cells.group | fc$min.cell.2 >= min.cells.group)
+            
+            # filtering on pct and min.cells (genes will be filtered if these two criteria are not met)
+            fc$status2 = (fc$pct.1 >= min.pct | fc$pct.2 >= min.pct) & 
+                (fc$min.cell.1 >= min.cells.group | fc$min.cell.2 >= min.cells.group)
+            
+            fc_list[[celltype]] = fc 
+            rm(fc)
+        }
+        
+        # loop through all the cell types in the fc_list to get a index for the genes to test 
+        for( idx_i in 1:(length(celltype_list)) ){
+            celltype = levels(mat_all$cell_type)[idx_i]
+            
+            if(idx_i == 1){
+                idx_list = data.frame(celltype = fc_list[[celltype]]$status)
+                idx_list2 = data.frame(celltype = fc_list[[celltype]]$status2)
+                names(idx_list) = celltype
+                names(idx_list2) = celltype
+                # 
+                fc_mat = data.frame(celltype = fc_list[[celltype]]$avg_log2FC)
+                names(fc_mat) = paste0("log2FC_", celltype)
+                rownames(fc_mat) = rownames(fc_list[[celltype]])
+            } else {
+                idx_list[[celltype]] = fc_list[[celltype]]$status
+                idx_list2[[celltype]] = fc_list[[celltype]]$status2
+                
+                fc_mat[[paste0("log2FC_", celltype)]] = fc_list[[celltype]]$avg_log2FC
+            }
+        }
+        # count all the columns and get a single index vector
+        idx_for_DE = which(apply(X = idx_list, MARGIN = 1, FUN = any))
+        # get the fold-change matrix
+        fc_mat[!as.matrix(idx_list2)] = NA
+        
+        # need to add the PRTB target itself
+        idx_PRTB = which(rownames(object) %in% PRTB)
+        # merge the two indices
+        idx_for_DE = unique(c(idx_PRTB, idx_for_DE))
+        
+        
+        ######################################################
+        ###  the actual DE test using glmGamPoi
+        ######################################################
+        
+        if(DE_FLAG == "standard"){
+            message(paste0(PRTB, " is running standard DE test! "))
+            
+            # 
+            if(length(celltype_list) > 1){
+                fit_rough <- glm_gp_disp_only(data = count_data2[idx_for_DE, ], 
+                                              design = ~ 0 + cell_type + log_ct, 
+                                              col_data = mat_all, 
+                                              size_factors = F, # since we have log_ct in the covariates, we do not need it. 
+                                              on_disk = FALSE)
+                
+                fit <- glm_gp(data = count_data2[idx_for_DE, ], 
+                              design = ~ 0 + cell_type + weight:cell_type + log_ct, 
+                              col_data = mat_all, 
+                              overdispersion = fit_rough$overdispersions, 
+                              overdispersion_shrinkage = F, 
+                              size_factors = F, # since we have log_ct in the covariates, we do not need it. 
+                              on_disk = FALSE)
+            } else {
+                fit <- glm_gp(data = count_data2[idx_for_DE, ], 
+                              design = ~ 1 + weight + log_ct, 
+                              col_data = mat_all, 
+                              size_factors = F, # since we have log_ct in the covariates, we do not need it. 
+                              on_disk = FALSE)
+            }
+            
+            # get the SE for each coefficients
+            identity_design_matrix <-  diag(nrow = ncol(fit$Beta))
+            pred <- predict(fit, se.fit = TRUE, newdata = identity_design_matrix)
+            se = pred$se.fit
+            
+            # get p-val
+            beta = fit$Beta
+            p = pchisq((beta/se)^2, df = 1, lower.tail = F)
+            p = as.data.frame(p)
+            beta = as.data.frame(beta)
+            names(p) = paste0("p_", names(p))
+            names(beta) = paste0("beta_", names(beta))
+            p$gene_ID = row.names(p)
+            res = cbind(beta, p)
+        }
+        
+        ###########
+        #   final step: paste the fold-change info to data.frame "res"
+        # res = cbind(res, fc_mat[idx_for_DE, , drop = F])
+        fc_mat$gene_ID = rownames(fc_mat)
+        res = merge(x = res, y = fc_mat, 
+                    by = "gene_ID", 
+                    all.x =T )
+        res$DE_method = DE_FLAG
+        
+        # save the DE results for this PRTB to "all_res"
+        rownames(res) = res$gene_ID
+        
+        # check if the user wants the full results or not 
+        idx_colnames1 = grep(pattern = "weight", 
+                             x = colnames(res), 
+                             value = T)
+        idx_colnames2 = grep(pattern = "^log2FC", 
+                             x = colnames(res), 
+                             value = T)
+        # sort the results based on P 
+        num_ct = length(unique(mat_B$cell_type))
+        res = res[order(res[, tail(idx_colnames1, 1)] ), ]
+        
+        if(isTRUE(full.results)){
+            # nothing happens
+        } else {
+            res = res[, c("gene_ID", idx_colnames2, idx_colnames1, "DE_method")]
+        }
+        
+        # 
+        if(length(idx_colnames2) == 1){
+            names(res)[which(names(res) == idx_colnames2)] = "log2FC"
+        }
+        # 
+        all_res[[PRTB]] = res
+        
+        message(paste0("DE test for '", PRTB, "' is completed. Number of remaining groups = ", length(all_PRTB_list) - match(PRTB, all_PRTB_list)))
+    }
+    
+    return(all_res)
+}
+
+
 
 #' Rearrange the DE results into a list of Z-score matrices
 #'
