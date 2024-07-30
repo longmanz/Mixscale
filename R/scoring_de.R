@@ -223,19 +223,6 @@ Run_wmvRegDE = function (object,
         count_data2 = GetAssayData(object = object[['RNA']], slot = "counts")[, idx]
         # count_data_std2 = GetAssayData(object = object[['RNA']], slot = "data")[, idx]
         
-        # do not do fold-change check, only do var and min.pct check
-        # idx_for_DE = which(apply(count_data_std2, MARGIN = 1, FUN = get_idx, idx_P = idx_P, idx_NT = idx_NT, logfc.threshold = logfc.threshold, norm.method = 'log.norm'))
-        # overall_FC = FoldChange_new(object = GetAssayData(object = object, slot = "data"),
-        #                                 cells.1 = colnames(object)[idx_NT],
-        #                                 cells.2 = colnames(object)[idx_P],
-        #                                 mean.fxn = function(x) log(x = rowMeans(x = expm1(x = x)) + pseudocount.use, base = base),
-        #                                 fc.name = "avg_log2FC",
-        #                                 features = rownames(x = object) ) 
-        # 
-        # idx_for_DE = (overall_FC$avg_log2FC != 0) & 
-        #     (overall_FC$pct.1 >= min.pct | overall_FC$pct.2 >= min.pct) & 
-        #     (overall_FC$min.cell.1 >= min.cells | overall_FC$min.cell.2 >= min.cells)
-        
         # here we will calculate the logfc within each cell type. 
         fc_list = list()
         for( idx_i in 1:(length(celltype_list)) ){
@@ -246,13 +233,10 @@ Run_wmvRegDE = function (object,
             idx_P_celltype = match(mat_all$cell_label[mat_all$cell_type == celltype & 
                                                           mat_all$gene != nt.class.name], colnames(object))
             # get the fold-change and min.pct and min.cell
-            fc = FoldChange_new(obj = GetAssayData(object = object, slot = "data"),
-                                # cells.1 = colnames(object)[idx_NT_celltype],
-                                # cells.2 = colnames(object)[idx_P_celltype],
+            fc = FoldChange_new(obj = GetAssayData(object = object, slot = "counts"),
                                 cells.1 = colnames(object)[idx_P_celltype],
                                 cells.2 = colnames(object)[idx_NT_celltype],
-                                # mean.fxn = function(x) log(x = Matrix::rowMeans(x = expm1(x = x)) + pseudocount.use, base = base), # old version in seurat v4
-                                mean.fxn = function(x) log(x = (rowSums(x = expm1(x = x)) + pseudocount.use)/NCOL(x), base = base),
+                                mean.fxn = function(x) log(x = (rowSums(x = x) + pseudocount.use)/NCOL(x), base = base),
                                 fc.name = "avg_log2FC",
                                 features = rownames(x = object) ) 
             # overall filtering (including fold-change)
@@ -649,19 +633,6 @@ Run_stdDE = function (object,
         count_data2 = GetAssayData(object = object[['RNA']], slot = "counts")[, idx]
         # count_data_std2 = GetAssayData(object = object[['RNA']], slot = "data")[, idx]
         
-        # do not do fold-change check, only do var and min.pct check
-        # idx_for_DE = which(apply(count_data_std2, MARGIN = 1, FUN = get_idx, idx_P = idx_P, idx_NT = idx_NT, logfc.threshold = logfc.threshold, norm.method = 'log.norm'))
-        # overall_FC = FoldChange_new(object = GetAssayData(object = object, slot = "data"),
-        #                                 cells.1 = colnames(object)[idx_NT],
-        #                                 cells.2 = colnames(object)[idx_P],
-        #                                 mean.fxn = function(x) log(x = rowMeans(x = expm1(x = x)) + pseudocount.use, base = base),
-        #                                 fc.name = "avg_log2FC",
-        #                                 features = rownames(x = object) ) 
-        # 
-        # idx_for_DE = (overall_FC$avg_log2FC != 0) & 
-        #     (overall_FC$pct.1 >= min.pct | overall_FC$pct.2 >= min.pct) & 
-        #     (overall_FC$min.cell.1 >= min.cells | overall_FC$min.cell.2 >= min.cells)
-        
         # here we will calculate the logfc within each cell type. 
         fc_list = list()
         for( idx_i in 1:(length(celltype_list)) ){
@@ -672,13 +643,10 @@ Run_stdDE = function (object,
             idx_P_celltype = match(mat_all$cell_label[mat_all$cell_type == celltype & 
                                                           mat_all$gene != nt.class.name], colnames(object))
             # get the fold-change and min.pct and min.cell
-            fc = FoldChange_new(obj = GetAssayData(object = object, slot = "data"),
-                                # cells.1 = colnames(object)[idx_NT_celltype],
-                                # cells.2 = colnames(object)[idx_P_celltype],
+            fc = FoldChange_new(obj = GetAssayData(object = object, slot = "counts"),
                                 cells.1 = colnames(object)[idx_P_celltype],
                                 cells.2 = colnames(object)[idx_NT_celltype],
-                                # mean.fxn = function(x) log(x = Matrix::rowMeans(x = expm1(x = x)) + pseudocount.use, base = base), # old version in seurat v4
-                                mean.fxn = function(x) log(x = (rowSums(x = expm1(x = x)) + pseudocount.use)/NCOL(x), base = base),
+                                mean.fxn = function(x) log(x = (rowSums(x = x) + pseudocount.use)/NCOL(x), base = base),
                                 fc.name = "avg_log2FC",
                                 features = rownames(x = object) ) 
             # overall filtering (including fold-change)
