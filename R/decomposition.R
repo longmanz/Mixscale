@@ -650,6 +650,8 @@ DEmultiCCA = function(mat_list = NULL,
             cor_num = length(celltype_list)
         } else if (cor_number > length(celltype_list)){
             cor_num = length(celltype_list)
+        } else {
+            cor_num = cor_number
         }
         
         # save the MCP list
