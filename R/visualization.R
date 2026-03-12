@@ -207,7 +207,7 @@ Mixscale_ScatterPlot = function(object = NULL,
             scores$cell_ID = rownames(scores)
             
             #  get the target gene expression level
-            target_expression <- GetAssayData(object = object, assay = assay, slot = slot)[prtb, scores$cell_ID]
+            target_expression <- GetAssayData(object = object, assay = assay, layer = slot)[prtb, scores$cell_ID]
             
             target_expression = as.data.frame(target_expression)
             target_expression$cell_ID = rownames(target_expression)

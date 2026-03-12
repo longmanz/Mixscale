@@ -220,20 +220,20 @@ Run_wmvRegDE = function (object,
         # idx_NT = match(mat_all$cell_label[mat_all$gene == "NT"], colnames(count_data2))
         # idx_P = match(mat_all$cell_label[mat_all$gene != "NT"], colnames(count_data2))
         
-        count_data2 = GetAssayData(object = object[['RNA']], slot = "counts")[, idx]
+        count_data2 = GetAssayData(object = object[['RNA']], layer = "counts")[, idx]
         # count_data_std2 = GetAssayData(object = object[['RNA']], slot = "data")[, idx]
-        
-        # here we will calculate the logfc within each cell type. 
+
+        # here we will calculate the logfc within each cell type.
         fc_list = list()
         for( idx_i in 1:(length(celltype_list)) ){
             celltype = levels(mat_all$cell_type)[idx_i]
             # get the indices
-            idx_NT_celltype = match(mat_all$cell_label[mat_all$cell_type == celltype & 
+            idx_NT_celltype = match(mat_all$cell_label[mat_all$cell_type == celltype &
                                                            mat_all$gene == nt.class.name], colnames(object))
-            idx_P_celltype = match(mat_all$cell_label[mat_all$cell_type == celltype & 
+            idx_P_celltype = match(mat_all$cell_label[mat_all$cell_type == celltype &
                                                           mat_all$gene != nt.class.name], colnames(object))
             # get the fold-change and min.pct and min.cell
-            fc = FoldChange_new(obj = GetAssayData(object = object, slot = "counts"),
+            fc = FoldChange_new(obj = GetAssayData(object = object, layer = "counts"),
                                 cells.1 = colnames(object)[idx_P_celltype],
                                 cells.2 = colnames(object)[idx_NT_celltype],
                                 mean.fxn = function(x) log(x = (rowSums(x = x) + pseudocount.use)/NCOL(x), base = base),
@@ -630,20 +630,20 @@ Run_stdDE = function (object,
         # idx_NT = match(mat_all$cell_label[mat_all$gene == "NT"], colnames(count_data2))
         # idx_P = match(mat_all$cell_label[mat_all$gene != "NT"], colnames(count_data2))
         
-        count_data2 = GetAssayData(object = object[['RNA']], slot = "counts")[, idx]
+        count_data2 = GetAssayData(object = object[['RNA']], layer = "counts")[, idx]
         # count_data_std2 = GetAssayData(object = object[['RNA']], slot = "data")[, idx]
-        
-        # here we will calculate the logfc within each cell type. 
+
+        # here we will calculate the logfc within each cell type.
         fc_list = list()
         for( idx_i in 1:(length(celltype_list)) ){
             celltype = levels(mat_all$cell_type)[idx_i]
             # get the indices
-            idx_NT_celltype = match(mat_all$cell_label[mat_all$cell_type == celltype & 
+            idx_NT_celltype = match(mat_all$cell_label[mat_all$cell_type == celltype &
                                                            mat_all$gene == nt.class.name], colnames(object))
-            idx_P_celltype = match(mat_all$cell_label[mat_all$cell_type == celltype & 
+            idx_P_celltype = match(mat_all$cell_label[mat_all$cell_type == celltype &
                                                           mat_all$gene != nt.class.name], colnames(object))
             # get the fold-change and min.pct and min.cell
-            fc = FoldChange_new(obj = GetAssayData(object = object, slot = "counts"),
+            fc = FoldChange_new(obj = GetAssayData(object = object, layer = "counts"),
                                 cells.1 = colnames(object)[idx_P_celltype],
                                 cells.2 = colnames(object)[idx_NT_celltype],
                                 mean.fxn = function(x) log(x = (rowSums(x = x) + pseudocount.use)/NCOL(x), base = base),

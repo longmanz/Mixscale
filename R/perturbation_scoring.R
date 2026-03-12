@@ -349,8 +349,8 @@ RunMixscale = function (object, assay = "PRTB", slot = "scale.data", labels = "g
                     message("  ", gene)
                 }
                 de.genes <- prtb_markers[[s]][[gene]]
-                dat <- GetAssayData(object = object[[assay]], 
-                                    slot = "data")[de.genes, all.cells, drop = FALSE]
+                dat <- GetAssayData(object = object[[assay]],
+                                    layer = "data")[de.genes, all.cells, drop = FALSE]
                 if (slot == "scale.data") {
                     dat <- ScaleData(object = dat, features = de.genes, 
                                      verbose = FALSE)
